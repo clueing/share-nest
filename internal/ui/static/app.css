@@ -306,6 +306,14 @@ label span {
   color: var(--text-soft);
 }
 
+.field-label {
+  display: block;
+  margin-bottom: var(--space-2);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-soft);
+}
+
 input,
 textarea {
   width: 100%;

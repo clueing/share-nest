@@ -27,14 +27,14 @@
       </div>
       <form method="post" action="/admin/upload" enctype="multipart/form-data" class="stack-form">
         <input type="hidden" name="page" value="{{.CurrentPage}}">
-        <label class="dropzone" data-dropzone>
-          <span>选择文件</span>
+        <div class="dropzone" data-dropzone>
+          <span class="field-label">选择文件</span>
           <div class="dropzone-box">
             <strong>拖拽文件到这里</strong>
             <p>或点击选择文件，上传后自动生成分享。</p>
           </div>
           <input type="file" id="uploadFileInput" name="file" required data-drop-input>
-        </label>
+        </div>
         <label>
           <span>分享密码</span>
           <div class="input-action">
@@ -457,7 +457,9 @@
         const box = dropzone.querySelector(".dropzone-box");
         if (!input || !box) return;
 
-        box.addEventListener("click", () => input.click());
+        box.addEventListener("click", () => {
+          input.click();
+        });
         ["dragenter", "dragover"].forEach((eventName) => {
           dropzone.addEventListener(eventName, (event) => {
             event.preventDefault();
@@ -485,6 +487,9 @@
           const firstFile = input.files[0];
           box.querySelector("strong").textContent = firstFile.name;
           box.querySelector("p").textContent = `已选择 ${input.files.length} 个文件，提交后开始上传。`;
+        });
+        input.addEventListener("click", (event) => {
+          event.stopPropagation();
         });
       });
     })();
