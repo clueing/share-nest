@@ -53,9 +53,19 @@
         <button type="submit" class="primary-btn">验证并查看</button>
       </form>
     </section>
+    {{else if .NoDownloads}}
+    <section class="panel">
+      <div class="empty-state">下载次数已用尽，当前分享不再提供预览或下载。</div>
+    </section>
     {{else}}
     <section class="panel preview-panel">
       {{if eq .PreviewMode "text"}}
+      {{if .CanCopyText}}
+      <div class="preview-toolbar">
+        <button type="button" class="ghost-btn compact-btn" id="copyTextContentBtn">复制文本内容</button>
+      </div>
+      <textarea id="copyTextContentSource" hidden>{{.Item.ContentText}}</textarea>
+      {{end}}
       <pre class="text-preview">{{.TextPreview}}</pre>
       {{if .Truncated}}
       <p class="preview-note">内容较长，当前仅展示前 {{humanSize .PreviewLimit}}。</p>
@@ -80,6 +90,40 @@
     </section>
     {{end}}
   </main>
+
+  {{if .CanCopyText}}
+  <div class="copy-toast" id="copyToast" hidden>已复制到剪切板</div>
+  <script>
+    (() => {
+      const button = document.getElementById("copyTextContentBtn");
+      const source = document.getElementById("copyTextContentSource");
+      const toast = document.getElementById("copyToast");
+      if (!button || !source || !toast) return;
+
+      const showToast = (text) => {
+        toast.textContent = text;
+        toast.hidden = false;
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => {
+          toast.hidden = true;
+        }, 1800);
+      };
+
+      button.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(source.value);
+          showToast("文本内容已复制");
+        } catch (_) {
+          source.hidden = false;
+          source.select();
+          document.execCommand("copy");
+          source.hidden = true;
+          showToast("文本内容已复制");
+        }
+      });
+    })();
+  </script>
+  {{end}}
 </body>
 </html>
 {{end}}

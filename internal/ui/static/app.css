@@ -607,6 +607,12 @@ thead th {
   z-index: 20;
 }
 
+.preview-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 18px 18px 0;
+}
+
 .disabled-btn {
   opacity: 0.65;
   pointer-events: none;

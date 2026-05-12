@@ -62,6 +62,7 @@ type sharePageData struct {
 	Error        string
 	Expired      bool
 	NoDownloads  bool
+	CanCopyText  bool
 	PreviewMode  preview.Mode
 	TextPreview  string
 	Truncated    bool
@@ -442,6 +443,11 @@ func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
 		s.renderShareLocked(w, share, "")
 		return
 	}
+	if s.downloadLimitReached(share) {
+		s.logAccess(r, share, "share_view", "denied", "download limit reached")
+		s.renderShareBlocked(w, share, "下载次数已用尽，当前分享不再提供预览。", false, true)
+		return
+	}
 
 	s.logAccess(r, share, "share_view", "success", "")
 	s.renderShareContent(w, r, share, "")
@@ -488,6 +494,11 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "需要先验证分享密码", http.StatusUnauthorized)
 		return
 	}
+	if s.downloadLimitReached(share) {
+		s.logAccess(r, share, "preview", "denied", "download limit reached")
+		http.Error(w, "下载次数已用尽，无法继续预览", http.StatusForbidden)
+		return
+	}
 
 	s.logAccess(r, share, "preview", "success", "")
 	s.serveItemContent(w, r, share, false)
@@ -532,7 +543,11 @@ func (s *Server) serveItemContent(w http.ResponseWriter, r *http.Request, item m
 		disposition = "attachment"
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, sanitizeFilename(item.Name)))
+	filename := sanitizeFilename(item.Name)
+	if download && item.Kind == "text" {
+		filename = ensureTextDownloadName(item)
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, filename))
 
 	if item.Kind == "text" {
 		if item.MIMEType != "" {
@@ -583,6 +598,7 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 		Error:        errText,
 		Expired:      false,
 		NoDownloads:  s.downloadLimitReached(item),
+		CanCopyText:  item.Kind == "text",
 		PreviewMode:  mode,
 		TextPreview:  textPreview,
 		Truncated:    truncated,
@@ -601,6 +617,7 @@ func (s *Server) renderShareLocked(w http.ResponseWriter, item model.SharedItem,
 		Error:        errText,
 		Expired:      false,
 		NoDownloads:  false,
+		CanCopyText:  false,
 		PreviewLimit: s.cfg.PreviewLimit,
 	}
 	s.render(w, "share", data, http.StatusOK)
@@ -613,6 +630,7 @@ func (s *Server) renderShareBlocked(w http.ResponseWriter, item model.SharedItem
 		Error:        errText,
 		Expired:      expired,
 		NoDownloads:  noDownloads,
+		CanCopyText:  false,
 		PreviewLimit: s.cfg.PreviewLimit,
 	}
 	s.render(w, "share", data, http.StatusOK)
@@ -810,6 +828,18 @@ func sanitizeFilename(name string) string {
 		return "download.bin"
 	}
 	return name
+}
+
+func ensureTextDownloadName(item model.SharedItem) string {
+	name := sanitizeFilename(item.Name)
+	if filepath.Ext(name) != "" {
+		return name
+	}
+
+	if strings.Contains(strings.ToLower(item.MIMEType), "markdown") || strings.EqualFold(item.Ext, "md") {
+		return name + ".md"
+	}
+	return name + ".txt"
 }
 
 func (s *Server) buildSuccessFlash(r *http.Request, summary model.ItemSummary, sharePassword, message string) flashData {
