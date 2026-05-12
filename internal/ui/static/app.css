@@ -410,6 +410,7 @@ button,
   background: #fff7f7;
   color: #b42318;
   border: 1px solid #fecaca;
+  margin-bottom: var(--space-4);
 }
 
 .notice-success {
