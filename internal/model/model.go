@@ -20,15 +20,33 @@ type ItemSummary struct {
 	ShareCode         string
 	ShareAccessToken  string
 	SharePassword     string
+	ShareExpiresAt    *time.Time
+	MaxDownloads      int
+	DownloadCount     int
 	ShareEnabled      bool
 	PasswordProtected bool
 }
 
 type SharedItem struct {
 	Item
-	ShareCode    string
-	AccessToken  string
+	ShareCode     string
+	AccessToken   string
 	SharePassword string
-	ShareEnabled bool
-	PasswordHash string
+	ShareExpiresAt *time.Time
+	MaxDownloads   int
+	DownloadCount  int
+	ShareEnabled   bool
+	PasswordHash   string
+}
+
+type AccessLog struct {
+	ID        int64
+	ShareCode string
+	ItemName  string
+	EventType string
+	Status    string
+	Message   string
+	ClientIP  string
+	UserAgent string
+	CreatedAt time.Time
 }

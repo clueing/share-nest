@@ -158,11 +158,51 @@ textarea {
   gap: 16px;
 }
 
+.inline-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .input-action {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
+}
+
+.dropzone {
+  display: grid;
+  gap: 8px;
+}
+
+.dropzone input[type="file"] {
+  display: none;
+}
+
+.dropzone-box {
+  border: 1px dashed #9eb8b3;
+  border-radius: 18px;
+  padding: 24px 18px;
+  background: linear-gradient(180deg, #f7fbfa 0%, #eef8f6 100%);
+  text-align: center;
+  cursor: pointer;
+}
+
+.dropzone-box strong {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.dropzone-box p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.dropzone-active .dropzone-box {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, #ecfbf8 0%, #dff5f1 100%);
 }
 
 .narrow-form {
@@ -244,6 +284,23 @@ button,
   border: 1px solid #9ad9d1;
 }
 
+.batch-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.batch-hint {
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .list-toolbar {
   display: flex;
   justify-content: space-between;
@@ -295,10 +352,33 @@ button,
   gap: 8px;
 }
 
+.share-status-block {
+  padding-top: 2px;
+}
+
 .share-label,
 .share-note {
   color: var(--muted);
   font-size: 13px;
+}
+
+.status-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f4f1e9;
+  border: 1px solid #e4dece;
+  color: #555c56;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 table {
@@ -527,6 +607,11 @@ thead th {
   z-index: 20;
 }
 
+.disabled-btn {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
 .preview-panel {
   padding: 0;
   overflow: hidden;
@@ -609,6 +694,16 @@ thead th {
 
   .input-action {
     grid-template-columns: 1fr;
+  }
+
+  .inline-grid,
+  .batch-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .batch-toolbar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   table,

@@ -56,13 +56,29 @@ CREATE TABLE IF NOT EXISTS shares (
 	password_hash TEXT NOT NULL DEFAULT '',
 	password_plain TEXT NOT NULL DEFAULT '',
 	access_token TEXT NOT NULL DEFAULT '',
+	expires_at INTEGER NOT NULL DEFAULT 0,
+	max_downloads INTEGER NOT NULL DEFAULT 0,
+	download_count INTEGER NOT NULL DEFAULT 0,
 	enabled INTEGER NOT NULL DEFAULT 1,
 	created_at INTEGER NOT NULL,
 	FOREIGN KEY(item_id) REFERENCES items(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS access_logs (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	share_code TEXT NOT NULL DEFAULT '',
+	item_name TEXT NOT NULL DEFAULT '',
+	event_type TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL DEFAULT '',
+	message TEXT NOT NULL DEFAULT '',
+	client_ip TEXT NOT NULL DEFAULT '',
+	user_agent TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_items_created_at ON items(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_shares_code ON shares(share_code);
+CREATE INDEX IF NOT EXISTS idx_access_logs_created_at ON access_logs(created_at DESC);
 `
 
 	_, err := r.db.Exec(schema)
@@ -76,11 +92,20 @@ CREATE INDEX IF NOT EXISTS idx_shares_code ON shares(share_code);
 	if err := r.ensureShareColumn(`ALTER TABLE shares ADD COLUMN password_plain TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
+	if err := r.ensureShareColumn(`ALTER TABLE shares ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := r.ensureShareColumn(`ALTER TABLE shares ADD COLUMN max_downloads INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := r.ensureShareColumn(`ALTER TABLE shares ADD COLUMN download_count INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
 
 	return r.backfillAccessTokens()
 }
 
-func (r *SQLiteRepo) CreateItemWithShare(ctx context.Context, item model.Item, passwordHash, passwordPlain string) (model.ItemSummary, error) {
+func (r *SQLiteRepo) CreateItemWithShare(ctx context.Context, item model.Item, passwordHash, passwordPlain string, expiresAt *time.Time, maxDownloads int) (model.ItemSummary, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return model.ItemSummary{}, err
@@ -116,17 +141,23 @@ func (r *SQLiteRepo) CreateItemWithShare(ctx context.Context, item model.Item, p
 	if passwordHash != "" {
 		accessToken = security.RandomString(24)
 	}
+	var expiresUnix int64
+	if expiresAt != nil {
+		expiresUnix = expiresAt.Unix()
+	}
 	for range 8 {
 		shareCode = security.RandomString(10)
 		_, err = tx.ExecContext(
 			ctx,
-			`INSERT INTO shares (item_id, share_code, password_hash, password_plain, access_token, enabled, created_at)
-			 VALUES (?, ?, ?, ?, ?, 1, ?)`,
+			`INSERT INTO shares (item_id, share_code, password_hash, password_plain, access_token, expires_at, max_downloads, download_count, enabled, created_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?)`,
 			itemID,
 			shareCode,
 			passwordHash,
 			passwordPlain,
 			accessToken,
+			expiresUnix,
+			maxDownloads,
 			now,
 		)
 		if err == nil {
@@ -148,6 +179,9 @@ func (r *SQLiteRepo) CreateItemWithShare(ctx context.Context, item model.Item, p
 		ShareCode:         shareCode,
 		ShareAccessToken:  accessToken,
 		SharePassword:     passwordPlain,
+		ShareExpiresAt:    expiresAt,
+		MaxDownloads:      maxDownloads,
+		DownloadCount:     0,
 		ShareEnabled:      true,
 		PasswordProtected: passwordHash != "",
 	}, nil
@@ -162,7 +196,8 @@ func (r *SQLiteRepo) ListItemsPage(ctx context.Context, offset, limit int) ([]mo
 	rows, err := r.db.QueryContext(ctx, `
 SELECT
 	i.id, i.kind, i.name, i.storage_path, i.mime_type, i.ext, i.size, i.sha256, i.created_at,
-	COALESCE(s.share_code, ''), COALESCE(s.access_token, ''), COALESCE(s.password_plain, ''), COALESCE(s.password_hash, ''), COALESCE(s.enabled, 0)
+	COALESCE(s.share_code, ''), COALESCE(s.access_token, ''), COALESCE(s.password_plain, ''), COALESCE(s.password_hash, ''),
+	COALESCE(s.expires_at, 0), COALESCE(s.max_downloads, 0), COALESCE(s.download_count, 0), COALESCE(s.enabled, 0)
 FROM items i
 LEFT JOIN shares s ON s.item_id = i.id
 ORDER BY i.created_at DESC
@@ -176,6 +211,7 @@ LIMIT ? OFFSET ?`, limit, offset)
 	for rows.Next() {
 		var row model.ItemSummary
 		var createdAt int64
+		var expiresAt int64
 		var passwordHash string
 		var enabled int
 
@@ -193,12 +229,16 @@ LIMIT ? OFFSET ?`, limit, offset)
 			&row.ShareAccessToken,
 			&row.SharePassword,
 			&passwordHash,
+			&expiresAt,
+			&row.MaxDownloads,
+			&row.DownloadCount,
 			&enabled,
 		); err != nil {
 			return nil, 0, err
 		}
 
 		row.CreatedAt = time.Unix(createdAt, 0)
+		row.ShareExpiresAt = unixToTimePtr(expiresAt)
 		row.ShareEnabled = enabled == 1
 		row.PasswordProtected = passwordHash != ""
 		items = append(items, row)
@@ -210,12 +250,13 @@ LIMIT ? OFFSET ?`, limit, offset)
 func (r *SQLiteRepo) GetSharedItemByCode(ctx context.Context, code string) (model.SharedItem, error) {
 	var item model.SharedItem
 	var createdAt int64
+	var expiresAt int64
 	var enabled int
 
 	err := r.db.QueryRowContext(ctx, `
 SELECT
 	i.id, i.kind, i.name, i.storage_path, i.content_text, i.mime_type, i.ext, i.size, i.sha256, i.created_at,
-	s.share_code, s.access_token, s.password_plain, s.password_hash, s.enabled
+	s.share_code, s.access_token, s.password_plain, s.password_hash, s.expires_at, s.max_downloads, s.download_count, s.enabled
 FROM shares s
 JOIN items i ON i.id = s.item_id
 WHERE s.share_code = ?`,
@@ -235,6 +276,9 @@ WHERE s.share_code = ?`,
 		&item.AccessToken,
 		&item.SharePassword,
 		&item.PasswordHash,
+		&expiresAt,
+		&item.MaxDownloads,
+		&item.DownloadCount,
 		&enabled,
 	)
 	if err != nil {
@@ -245,8 +289,75 @@ WHERE s.share_code = ?`,
 	}
 
 	item.CreatedAt = time.Unix(createdAt, 0)
+	item.ShareExpiresAt = unixToTimePtr(expiresAt)
 	item.ShareEnabled = enabled == 1
 	return item, nil
+}
+
+func (r *SQLiteRepo) DeleteItems(ctx context.Context, itemIDs []int64) ([]model.Item, error) {
+	if len(itemIDs) == 0 {
+		return nil, nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	placeholders := repeatPlaceholders(len(itemIDs))
+	args := make([]any, 0, len(itemIDs))
+	for _, itemID := range itemIDs {
+		args = append(args, itemID)
+	}
+
+	rows, err := tx.QueryContext(
+		ctx,
+		fmt.Sprintf(`SELECT id, kind, name, storage_path, content_text, mime_type, ext, size, sha256, created_at
+		FROM items WHERE id IN (%s)`, placeholders),
+		args...,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []model.Item
+	for rows.Next() {
+		var item model.Item
+		var createdAt int64
+		if err := rows.Scan(
+			&item.ID,
+			&item.Kind,
+			&item.Name,
+			&item.StoragePath,
+			&item.ContentText,
+			&item.MIMEType,
+			&item.Ext,
+			&item.Size,
+			&item.SHA256,
+			&createdAt,
+		); err != nil {
+			return nil, err
+		}
+		item.CreatedAt = time.Unix(createdAt, 0)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+
+	if _, err := tx.ExecContext(ctx, fmt.Sprintf(`DELETE FROM items WHERE id IN (%s)`, placeholders), args...); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 func (r *SQLiteRepo) ensureShareColumn(statement string) error {
@@ -326,4 +437,93 @@ func (r *SQLiteRepo) DeleteItem(ctx context.Context, itemID int64) (model.Item, 
 		return model.Item{}, err
 	}
 	return item, nil
+}
+
+func (r *SQLiteRepo) IncrementDownloadCount(ctx context.Context, itemID int64) (bool, error) {
+	res, err := r.db.ExecContext(
+		ctx,
+		`UPDATE shares
+		 SET download_count = download_count + 1
+		 WHERE item_id = ? AND (max_downloads = 0 OR download_count < max_downloads)`,
+		itemID,
+	)
+	if err != nil {
+		return false, err
+	}
+
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected == 1, nil
+}
+
+func (r *SQLiteRepo) CreateAccessLog(ctx context.Context, entry model.AccessLog) error {
+	_, err := r.db.ExecContext(
+		ctx,
+		`INSERT INTO access_logs (share_code, item_name, event_type, status, message, client_ip, user_agent, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		entry.ShareCode,
+		entry.ItemName,
+		entry.EventType,
+		entry.Status,
+		entry.Message,
+		entry.ClientIP,
+		entry.UserAgent,
+		time.Now().Unix(),
+	)
+	return err
+}
+
+func (r *SQLiteRepo) ListRecentAccessLogs(ctx context.Context, limit int) ([]model.AccessLog, error) {
+	rows, err := r.db.QueryContext(
+		ctx,
+		`SELECT id, share_code, item_name, event_type, status, message, client_ip, user_agent, created_at
+		 FROM access_logs
+		 ORDER BY created_at DESC
+		 LIMIT ?`,
+		limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []model.AccessLog
+	for rows.Next() {
+		var logItem model.AccessLog
+		var createdAt int64
+		if err := rows.Scan(
+			&logItem.ID,
+			&logItem.ShareCode,
+			&logItem.ItemName,
+			&logItem.EventType,
+			&logItem.Status,
+			&logItem.Message,
+			&logItem.ClientIP,
+			&logItem.UserAgent,
+			&createdAt,
+		); err != nil {
+			return nil, err
+		}
+		logItem.CreatedAt = time.Unix(createdAt, 0)
+		logs = append(logs, logItem)
+	}
+
+	return logs, rows.Err()
+}
+
+func repeatPlaceholders(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	return strings.TrimRight(strings.Repeat("?,", count), ",")
+}
+
+func unixToTimePtr(value int64) *time.Time {
+	if value <= 0 {
+		return nil
+	}
+	t := time.Unix(value, 0)
+	return &t
 }

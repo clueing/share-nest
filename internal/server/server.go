@@ -41,6 +41,7 @@ type dashboardData struct {
 	SiteName   string
 	BaseURL    string
 	Items      []model.ItemSummary
+	AccessLogs []model.AccessLog
 	Message    string
 	Flash      flashData
 	EnvPath    string
@@ -59,6 +60,8 @@ type sharePageData struct {
 	Item         model.SharedItem
 	Locked       bool
 	Error        string
+	Expired      bool
+	NoDownloads  bool
 	PreviewMode  preview.Mode
 	TextPreview  string
 	Truncated    bool
@@ -132,6 +135,7 @@ func (s *Server) routes(staticFS http.FileSystem) {
 	s.mux.HandleFunc("POST /admin/upload", s.requireAdmin(s.handleUpload))
 	s.mux.HandleFunc("POST /admin/text", s.requireAdmin(s.handleCreateText))
 	s.mux.HandleFunc("POST /admin/items/{id}/delete", s.requireAdmin(s.handleDeleteItem))
+	s.mux.HandleFunc("POST /admin/items/batch-delete", s.requireAdmin(s.handleBatchDelete))
 	s.mux.HandleFunc("GET /s/{code}", s.handleSharePage)
 	s.mux.HandleFunc("POST /s/{code}/verify", s.handleShareVerify)
 	s.mux.HandleFunc("GET /s/{code}/raw", s.handleShareRaw)
@@ -218,10 +222,16 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	flash := s.readFlash(w, r)
+	logs, err := s.repo.ListRecentAccessLogs(r.Context(), 20)
+	if err != nil {
+		http.Error(w, "加载访问日志失败", http.StatusInternalServerError)
+		return
+	}
 	data := dashboardData{
 		SiteName:    s.cfg.SiteName,
 		BaseURL:     s.baseURL(r),
 		Items:       items,
+		AccessLogs:  logs,
 		Message:     flash.Message,
 		Flash:       flash,
 		EnvPath:     ".env",
@@ -256,6 +266,16 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sharePassword := strings.TrimSpace(r.FormValue("share_password"))
+	expiresAt, err := parseOptionalDateTimeLocal(r.FormValue("expires_at"))
+	if err != nil {
+		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：过期时间格式错误"})
+		return
+	}
+	maxDownloads, err := parseNonNegativeInt(r.FormValue("max_downloads"))
+	if err != nil {
+		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：下载次数限制格式错误"})
+		return
+	}
 
 	path, mimeType, shaValue, size, err := s.storage.SaveUploadedFile(file, header.Filename)
 	if err != nil {
@@ -272,7 +292,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		Size:        size,
 		SHA256:      shaValue,
 	}
-	summary, err := s.repo.CreateItemWithShare(r.Context(), item, passwordHash, sharePassword)
+	summary, err := s.repo.CreateItemWithShare(r.Context(), item, passwordHash, sharePassword, expiresAt, maxDownloads)
 	if err != nil {
 		_ = s.storage.Remove(path)
 		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：数据库写入异常"})
@@ -301,6 +321,16 @@ func (s *Server) handleCreateText(w http.ResponseWriter, r *http.Request) {
 		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：密码处理异常"})
 		return
 	}
+	expiresAt, err := parseOptionalDateTimeLocal(r.FormValue("expires_at"))
+	if err != nil {
+		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：过期时间格式错误"})
+		return
+	}
+	maxDownloads, err := parseNonNegativeInt(r.FormValue("max_downloads"))
+	if err != nil {
+		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：下载次数限制格式错误"})
+		return
+	}
 
 	mimeType := "text/plain; charset=utf-8"
 	if strings.EqualFold(filepath.Ext(name), ".md") {
@@ -315,7 +345,7 @@ func (s *Server) handleCreateText(w http.ResponseWriter, r *http.Request) {
 		Ext:         strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), "."),
 		Size:        int64(len([]byte(content))),
 	}
-	summary, err := s.repo.CreateItemWithShare(r.Context(), item, passwordHash, sharePassword)
+	summary, err := s.repo.CreateItemWithShare(r.Context(), item, passwordHash, sharePassword, expiresAt, maxDownloads)
 	if err != nil {
 		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：数据库写入异常"})
 		return
@@ -347,10 +377,61 @@ func (s *Server) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
 	s.redirectAdminMessage(w, r, flashData{Message: "资源已删除"})
 }
 
+func (s *Server) handleBatchDelete(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.redirectAdminMessage(w, r, flashData{Message: "批量删除失败：请求格式错误"})
+		return
+	}
+
+	rawIDs := r.Form["item_ids"]
+	if len(rawIDs) == 0 {
+		s.redirectAdminMessage(w, r, flashData{Message: "批量删除失败：未选择任何资源"})
+		return
+	}
+
+	itemIDs := make([]int64, 0, len(rawIDs))
+	seen := make(map[int64]struct{}, len(rawIDs))
+	for _, rawID := range rawIDs {
+		itemID, err := strconv.ParseInt(strings.TrimSpace(rawID), 10, 64)
+		if err != nil || itemID <= 0 {
+			continue
+		}
+		if _, exists := seen[itemID]; exists {
+			continue
+		}
+		seen[itemID] = struct{}{}
+		itemIDs = append(itemIDs, itemID)
+	}
+
+	if len(itemIDs) == 0 {
+		s.redirectAdminMessage(w, r, flashData{Message: "批量删除失败：资源 ID 无效"})
+		return
+	}
+
+	items, err := s.repo.DeleteItems(r.Context(), itemIDs)
+	if err != nil {
+		s.redirectAdminMessage(w, r, flashData{Message: "批量删除失败：数据库异常"})
+		return
+	}
+
+	for _, item := range items {
+		if item.StoragePath != "" {
+			_ = s.storage.Remove(item.StoragePath)
+		}
+	}
+
+	s.redirectAdminMessage(w, r, flashData{Message: fmt.Sprintf("已批量删除 %d 个资源", len(items))})
+}
+
 func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
 	share, err := s.loadShare(r)
 	if err != nil {
 		s.renderShareError(w, err)
+		return
+	}
+	if s.shareExpired(share) {
+		s.logAccess(r, share, "share_view", "denied", "share expired")
+		s.renderShareBlocked(w, share, "分享已过期", true, false)
 		return
 	}
 
@@ -362,6 +443,7 @@ func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.logAccess(r, share, "share_view", "success", "")
 	s.renderShareContent(w, r, share, "")
 }
 
@@ -373,23 +455,20 @@ func (s *Server) handleShareVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
+		s.logAccess(r, share, "password_verify", "error", "invalid form")
 		s.renderShareLocked(w, share, "请求格式错误")
 		return
 	}
 
 	password := r.FormValue("password")
 	if !security.VerifyPassword(share.PasswordHash, password) {
+		s.logAccess(r, share, "password_verify", "denied", "wrong password")
 		s.renderShareLocked(w, share, "密码错误")
 		return
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     s.shareCookieName(share.ShareCode),
-		Value:    s.shareCookieValue(share),
-		Path:     "/s/" + share.ShareCode,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-	})
+	s.logAccess(r, share, "password_verify", "success", "")
+	s.setShareCookie(w, share)
 	http.Redirect(w, r, "/s/"+share.ShareCode, http.StatusSeeOther)
 }
 
@@ -399,11 +478,18 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 		s.renderShareError(w, err)
 		return
 	}
+	if s.shareExpired(share) {
+		s.logAccess(r, share, "preview", "denied", "share expired")
+		http.Error(w, "分享已过期", http.StatusGone)
+		return
+	}
 	if share.PasswordHash != "" && !s.hasShareAccess(r, share) {
+		s.logAccess(r, share, "preview", "denied", "password required")
 		http.Error(w, "需要先验证分享密码", http.StatusUnauthorized)
 		return
 	}
 
+	s.logAccess(r, share, "preview", "success", "")
 	s.serveItemContent(w, r, share, false)
 }
 
@@ -413,11 +499,30 @@ func (s *Server) handleShareDownload(w http.ResponseWriter, r *http.Request) {
 		s.renderShareError(w, err)
 		return
 	}
+	if s.shareExpired(share) {
+		s.logAccess(r, share, "download", "denied", "share expired")
+		http.Error(w, "分享已过期", http.StatusGone)
+		return
+	}
 	if share.PasswordHash != "" && !s.hasShareAccess(r, share) {
+		s.logAccess(r, share, "download", "denied", "password required")
 		http.Error(w, "需要先验证分享密码", http.StatusUnauthorized)
 		return
 	}
+	ok, err := s.repo.IncrementDownloadCount(r.Context(), share.ID)
+	if err != nil {
+		s.logAccess(r, share, "download", "error", "increment download count failed")
+		http.Error(w, "下载失败", http.StatusInternalServerError)
+		return
+	}
+	if !ok {
+		s.logAccess(r, share, "download", "denied", "download limit reached")
+		http.Error(w, "下载次数已用尽", http.StatusForbidden)
+		return
+	}
+	share.DownloadCount++
 
+	s.logAccess(r, share, "download", "success", "")
 	s.serveItemContent(w, r, share, true)
 }
 
@@ -476,6 +581,8 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 		Item:         item,
 		Locked:       false,
 		Error:        errText,
+		Expired:      false,
+		NoDownloads:  s.downloadLimitReached(item),
 		PreviewMode:  mode,
 		TextPreview:  textPreview,
 		Truncated:    truncated,
@@ -492,6 +599,20 @@ func (s *Server) renderShareLocked(w http.ResponseWriter, item model.SharedItem,
 		Item:         item,
 		Locked:       true,
 		Error:        errText,
+		Expired:      false,
+		NoDownloads:  false,
+		PreviewLimit: s.cfg.PreviewLimit,
+	}
+	s.render(w, "share", data, http.StatusOK)
+}
+
+func (s *Server) renderShareBlocked(w http.ResponseWriter, item model.SharedItem, errText string, expired, noDownloads bool) {
+	data := sharePageData{
+		SiteName:     s.cfg.SiteName,
+		Item:         item,
+		Error:        errText,
+		Expired:      expired,
+		NoDownloads:  noDownloads,
 		PreviewLimit: s.cfg.PreviewLimit,
 	}
 	s.render(w, "share", data, http.StatusOK)
@@ -572,6 +693,7 @@ func (s *Server) tryShareQueryAccess(w http.ResponseWriter, r *http.Request, ite
 
 	if token := strings.TrimSpace(query.Get("token")); token != "" && item.AccessToken != "" {
 		if security.EqualString(token, item.AccessToken) {
+			s.logAccess(r, item, "password_verify", "success", "token access")
 			s.setShareCookie(w, item)
 			http.Redirect(w, r, "/s/"+item.ShareCode, http.StatusSeeOther)
 			return true
@@ -583,6 +705,7 @@ func (s *Server) tryShareQueryAccess(w http.ResponseWriter, r *http.Request, ite
 		password = strings.TrimSpace(query.Get("password"))
 	}
 	if password != "" && security.VerifyPassword(item.PasswordHash, password) {
+		s.logAccess(r, item, "password_verify", "success", "password url access")
 		s.setShareCookie(w, item)
 		http.Redirect(w, r, "/s/"+item.ShareCode, http.StatusSeeOther)
 		return true
@@ -607,6 +730,14 @@ func (s *Server) setShareCookie(w http.ResponseWriter, item model.SharedItem) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 	})
+}
+
+func (s *Server) shareExpired(item model.SharedItem) bool {
+	return item.ShareExpiresAt != nil && time.Now().After(item.ShareExpiresAt.Local())
+}
+
+func (s *Server) downloadLimitReached(item model.SharedItem) bool {
+	return item.MaxDownloads > 0 && item.DownloadCount >= item.MaxDownloads
 }
 
 func (s *Server) hashOptionalPassword(password string) (string, error) {
@@ -774,6 +905,31 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+func parseOptionalDateTimeLocal(value string) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+
+	parsed, err := time.ParseInLocation("2006-01-02T15:04", value, time.Local)
+	if err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
+func parseNonNegativeInt(value string) (int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return 0, fmt.Errorf("invalid non-negative int")
+	}
+	return parsed, nil
+}
+
 func currentAdminPage(r *http.Request) int {
 	if err := r.ParseForm(); err == nil {
 		if page := parsePositiveInt(r.FormValue("page"), 0); page > 0 {
@@ -822,4 +978,30 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (s *Server) logAccess(r *http.Request, item model.SharedItem, eventType, status, message string) {
+	_ = s.repo.CreateAccessLog(r.Context(), model.AccessLog{
+		ShareCode: item.ShareCode,
+		ItemName:  item.Name,
+		EventType: eventType,
+		Status:    status,
+		Message:   message,
+		ClientIP:  clientIP(r),
+		UserAgent: firstNonEmpty(strings.TrimSpace(r.UserAgent()), "-"),
+	})
+}
+
+func clientIP(r *http.Request) string {
+	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
+		if first, _, ok := strings.Cut(forwardedFor, ","); ok {
+			return strings.TrimSpace(first)
+		}
+		return forwardedFor
+	}
+
+	if index := strings.LastIndex(r.RemoteAddr, ":"); index > 0 {
+		return r.RemoteAddr[:index]
+	}
+	return r.RemoteAddr
 }

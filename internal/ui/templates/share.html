@@ -18,10 +18,16 @@
           <span>{{.Item.Kind}}</span>
           <span>{{humanSize .Item.Size}}</span>
           <span>{{formatTime .Item.CreatedAt}}</span>
+          <span>{{if .Item.ShareExpiresAt}}过期于 {{formatTime .Item.ShareExpiresAt}}{{else}}永久有效{{end}}</span>
+          <span>{{if gt .Item.MaxDownloads 0}}下载 {{.Item.DownloadCount}} / {{.Item.MaxDownloads}}{{else}}下载不限{{end}}</span>
         </div>
       </div>
       {{if not .Locked}}
+      {{if .NoDownloads}}
+      <span class="ghost-btn disabled-btn">下载次数已用尽</span>
+      {{else}}
       <a href="{{.DownloadURL}}" class="primary-btn">下载</a>
+      {{end}}
       {{end}}
     </header>
 
@@ -29,7 +35,11 @@
     <div class="notice notice-error">{{.Error}}</div>
     {{end}}
 
-    {{if .Locked}}
+    {{if .Expired}}
+    <section class="panel">
+      <div class="empty-state">这个分享已经过期，无法继续访问。</div>
+    </section>
+    {{else if .Locked}}
     <section class="panel">
       <div class="panel-head">
         <h2>输入访问密码</h2>

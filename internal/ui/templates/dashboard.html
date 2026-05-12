@@ -27,9 +27,13 @@
       </div>
       <form method="post" action="/admin/upload" enctype="multipart/form-data" class="stack-form">
         <input type="hidden" name="page" value="{{.CurrentPage}}">
-        <label>
+        <label class="dropzone" data-dropzone>
           <span>选择文件</span>
-          <input type="file" name="file" required>
+          <div class="dropzone-box">
+            <strong>拖拽文件到这里</strong>
+            <p>或点击选择文件，上传后自动生成分享。</p>
+          </div>
+          <input type="file" id="uploadFileInput" name="file" required data-drop-input>
         </label>
         <label>
           <span>分享密码</span>
@@ -38,6 +42,16 @@
             <button type="button" class="ghost-btn compact-btn" data-generate-password>随机生成</button>
           </div>
         </label>
+        <div class="inline-grid">
+          <label>
+            <span>分享过期时间</span>
+            <input type="datetime-local" name="expires_at">
+          </label>
+          <label>
+            <span>下载次数限制</span>
+            <input type="number" name="max_downloads" min="0" placeholder="0 表示不限">
+          </label>
+        </div>
         <button type="submit" class="primary-btn">上传并生成分享</button>
       </form>
     </section>
@@ -60,6 +74,16 @@
             <button type="button" class="ghost-btn compact-btn" data-generate-password>随机生成</button>
           </div>
         </label>
+        <div class="inline-grid">
+          <label>
+            <span>分享过期时间</span>
+            <input type="datetime-local" name="expires_at">
+          </label>
+          <label>
+            <span>下载次数限制</span>
+            <input type="number" name="max_downloads" min="0" placeholder="0 表示不限">
+          </label>
+        </div>
         <label>
           <span>文本内容</span>
           <textarea name="content" rows="12" placeholder="输入要分享的文本内容" required></textarea>
@@ -107,6 +131,15 @@
         {{end}}
       </div>
 
+      <form method="post" action="/admin/items/batch-delete" id="batchDeleteForm" class="batch-toolbar">
+        <input type="hidden" name="page" value="{{.CurrentPage}}">
+        <div class="batch-hint">已选 <strong id="selectedCount">0</strong> 项</div>
+        <div class="button-row">
+          <button type="button" class="ghost-btn compact-btn" id="copySelectedBtn">复制选中分享</button>
+          <button type="submit" class="danger-btn" onclick="return confirm('确认批量删除选中的资源吗？');">批量删除</button>
+        </div>
+      </form>
+
       {{if not .Items}}
       <div class="empty-state">还没有任何资源，先上传一个文件或创建一段文本。</div>
       {{else}}
@@ -114,6 +147,7 @@
         <table>
           <thead>
             <tr>
+              <th><input type="checkbox" id="selectAllItems"></th>
               <th>名称</th>
               <th>类型</th>
               <th>大小</th>
@@ -126,6 +160,15 @@
           <tbody>
             {{range .Items}}
             <tr>
+              <td data-label="选择">
+                <input
+                  type="checkbox"
+                  name="item_ids"
+                  value="{{.ID}}"
+                  form="batchDeleteForm"
+                  class="item-checkbox"
+                  data-copy-value="{{if .PasswordProtected}}{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}{{else}}{{$.BaseURL}}/s/{{.ShareCode}}{{end}}">
+              </td>
               <td data-label="名称">
                 <div class="item-name">{{.Name}}</div>
                 <div class="item-meta">
@@ -166,6 +209,17 @@
                     </div>
                   </div>
                   {{end}}
+                  <div class="share-block share-status-block">
+                    <span class="share-label">分享状态</span>
+                    <div class="status-list">
+                      <span class="status-chip">
+                        {{if .ShareExpiresAt}}过期于 {{formatTime .ShareExpiresAt}}{{else}}永久有效{{end}}
+                      </span>
+                      <span class="status-chip">
+                        {{if gt .MaxDownloads 0}}下载 {{.DownloadCount}} / {{.MaxDownloads}}{{else}}下载不限{{end}}
+                      </span>
+                    </div>
+                  </div>
                 </div>
               </td>
               <td data-label="创建时间">{{formatTime .CreatedAt}}</td>
@@ -190,6 +244,49 @@
         <a href="/admin?page={{.NextPage}}" class="page-link {{if eq .CurrentPage .TotalPages}}page-link-disabled{{end}}">下一页</a>
       </nav>
       {{end}}
+      {{end}}
+    </section>
+
+    <section class="panel panel-wide">
+      <div class="panel-head">
+        <div>
+          <h2>访问日志</h2>
+          <p>展示最近 20 条分享访问、验证和下载记录。</p>
+        </div>
+      </div>
+
+      {{if not .AccessLogs}}
+      <div class="empty-state">还没有访问日志，分享被访问后会显示在这里。</div>
+      {{else}}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>时间</th>
+              <th>资源</th>
+              <th>事件</th>
+              <th>结果</th>
+              <th>IP</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .AccessLogs}}
+            <tr>
+              <td data-label="时间">{{formatTime .CreatedAt}}</td>
+              <td data-label="资源">
+                <div class="item-name">{{.ItemName}}</div>
+                {{if .ShareCode}}<div class="item-meta"><span class="tag tag-plain">{{.ShareCode}}</span></div>{{end}}
+              </td>
+              <td data-label="事件"><span class="type-badge">{{.EventType}}</span></td>
+              <td data-label="结果"><span class="tag {{if eq .Status "success"}}tag-soft{{else if eq .Status "denied"}}tag{{else}}tag-plain{{end}}">{{.Status}}</span></td>
+              <td data-label="IP">{{.ClientIP}}</td>
+              <td data-label="说明">{{if .Message}}{{.Message}}{{else}}-{{end}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
       {{end}}
     </section>
   </main>
@@ -294,6 +391,50 @@
         });
       });
 
+      const checkboxes = Array.from(document.querySelectorAll(".item-checkbox"));
+      const selectedCount = document.getElementById("selectedCount");
+      const selectAll = document.getElementById("selectAllItems");
+      const updateSelection = () => {
+        const checked = checkboxes.filter((input) => input.checked);
+        if (selectedCount) {
+          selectedCount.textContent = String(checked.length);
+        }
+        if (selectAll) {
+          selectAll.checked = checked.length > 0 && checked.length === checkboxes.length;
+          selectAll.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+        }
+      };
+
+      checkboxes.forEach((checkbox) => {
+        checkbox.addEventListener("change", updateSelection);
+      });
+
+      if (selectAll) {
+        selectAll.addEventListener("change", () => {
+          checkboxes.forEach((checkbox) => {
+            checkbox.checked = selectAll.checked;
+          });
+          updateSelection();
+        });
+      }
+
+      const copySelectedBtn = document.getElementById("copySelectedBtn");
+      if (copySelectedBtn) {
+        copySelectedBtn.addEventListener("click", () => {
+          const values = checkboxes
+            .filter((checkbox) => checkbox.checked)
+            .map((checkbox) => checkbox.dataset.copyValue)
+            .filter(Boolean);
+          if (values.length === 0) {
+            showToast("请先选择要复制的资源");
+            return;
+          }
+          copyText(values.join("\n"), "已复制选中分享链接");
+        });
+      }
+
+      updateSelection();
+
       const result = document.querySelector("[data-auto-copy]");
       if (result && result.dataset.autoCopy) {
         copyText(result.dataset.autoCopy, "分享链接已自动复制");
@@ -310,6 +451,42 @@
           button.addEventListener("click", () => modal.remove());
         });
       }
+
+      document.querySelectorAll("[data-dropzone]").forEach((dropzone) => {
+        const input = dropzone.querySelector("[data-drop-input]");
+        const box = dropzone.querySelector(".dropzone-box");
+        if (!input || !box) return;
+
+        box.addEventListener("click", () => input.click());
+        ["dragenter", "dragover"].forEach((eventName) => {
+          dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.add("dropzone-active");
+          });
+        });
+        ["dragleave", "dragend", "drop"].forEach((eventName) => {
+          dropzone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropzone.classList.remove("dropzone-active");
+          });
+        });
+        dropzone.addEventListener("drop", (event) => {
+          const files = event.dataTransfer?.files;
+          if (!files || files.length === 0) return;
+          input.files = files;
+          const firstFile = files[0];
+          if (firstFile) {
+            box.querySelector("strong").textContent = firstFile.name;
+            box.querySelector("p").textContent = `已选择 ${files.length} 个文件，提交后开始上传。`;
+          }
+        });
+        input.addEventListener("change", () => {
+          if (!input.files || input.files.length === 0) return;
+          const firstFile = input.files[0];
+          box.querySelector("strong").textContent = firstFile.name;
+          box.querySelector("p").textContent = `已选择 ${input.files.length} 个文件，提交后开始上传。`;
+        });
+      });
     })();
   </script>
 </body>
