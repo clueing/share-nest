@@ -1,0 +1,317 @@
+{{define "dashboard"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 | {{.SiteName}}</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">{{.SiteName}}</p>
+      <h1>管理后台</h1>
+    </div>
+    <form method="post" action="/logout">
+      <button type="submit" class="ghost-btn">退出</button>
+    </form>
+  </header>
+
+  <main class="dashboard-grid">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>上传文件</h2>
+        <p>上传后自动生成分享链接。</p>
+      </div>
+      <form method="post" action="/admin/upload" enctype="multipart/form-data" class="stack-form">
+        <input type="hidden" name="page" value="{{.CurrentPage}}">
+        <label>
+          <span>选择文件</span>
+          <input type="file" name="file" required>
+        </label>
+        <label>
+          <span>分享密码</span>
+          <div class="input-action">
+            <input type="text" name="share_password" placeholder="留空则无需密码" data-password-input>
+            <button type="button" class="ghost-btn compact-btn" data-generate-password>随机生成</button>
+          </div>
+        </label>
+        <button type="submit" class="primary-btn">上传并生成分享</button>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>创建文本分享</h2>
+        <p>适合日志片段、配置、脚本、说明文档。</p>
+      </div>
+      <form method="post" action="/admin/text" class="stack-form">
+        <input type="hidden" name="page" value="{{.CurrentPage}}">
+        <label>
+          <span>标题</span>
+          <input type="text" name="name" placeholder="例如：deploy.log 或 notes.md" required>
+        </label>
+        <label>
+          <span>分享密码</span>
+          <div class="input-action">
+            <input type="text" name="share_password" placeholder="留空则无需密码" data-password-input>
+            <button type="button" class="ghost-btn compact-btn" data-generate-password>随机生成</button>
+          </div>
+        </label>
+        <label>
+          <span>文本内容</span>
+          <textarea name="content" rows="12" placeholder="输入要分享的文本内容" required></textarea>
+        </label>
+        <button type="submit" class="primary-btn">保存并生成分享</button>
+      </form>
+    </section>
+
+    <section class="panel panel-wide">
+      <div class="panel-head">
+        <div>
+          <h2>环境变量配置</h2>
+          <p>编辑项目根目录 {{.EnvPath}} 后重启服务生效。</p>
+        </div>
+      </div>
+      <pre class="config-preview">{{.EnvExample}}</pre>
+    </section>
+
+    <section class="panel panel-wide">
+      <div class="panel-head">
+        <div>
+          <h2>资源列表</h2>
+          <p>已上传文件与文本分享统一管理，支持分页浏览。</p>
+        </div>
+        {{if .Message}}
+        <div class="notice notice-success">{{.Message}}</div>
+        {{end}}
+      </div>
+
+      <div class="list-toolbar">
+        <div class="list-stats">
+          <span class="stat-pill">总数量 {{.TotalCount}}</span>
+          <span class="stat-pill">总页数 {{.TotalPages}}</span>
+          <span class="stat-pill">当前第 {{.CurrentPage}} 页</span>
+          <span class="stat-pill">每页 {{.PageSize}} 条</span>
+        </div>
+        {{if gt .TotalPages 1}}
+        <nav class="pagination pagination-top" aria-label="资源列表分页">
+          <a href="/admin?page={{.PrevPage}}" class="page-link {{if eq .CurrentPage 1}}page-link-disabled{{end}}">上一页</a>
+          {{range .PageNumbers}}
+          <a href="/admin?page={{.}}" class="page-link {{if eq $.CurrentPage .}}page-link-current{{end}}">{{.}}</a>
+          {{end}}
+          <a href="/admin?page={{.NextPage}}" class="page-link {{if eq .CurrentPage .TotalPages}}page-link-disabled{{end}}">下一页</a>
+        </nav>
+        {{end}}
+      </div>
+
+      {{if not .Items}}
+      <div class="empty-state">还没有任何资源，先上传一个文件或创建一段文本。</div>
+      {{else}}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>类型</th>
+              <th>大小</th>
+              <th>预览</th>
+              <th>分享</th>
+              <th>创建时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            {{range .Items}}
+            <tr>
+              <td data-label="名称">
+                <div class="item-name">{{.Name}}</div>
+                <div class="item-meta">
+                  {{if .PasswordProtected}}<span class="tag">密码</span>{{else}}<span class="tag tag-soft">公开</span>{{end}}
+                  {{if .Ext}}<span class="tag tag-plain">.{{.Ext}}</span>{{end}}
+                </div>
+              </td>
+              <td data-label="类型"><span class="type-badge">{{.Kind}}</span></td>
+              <td data-label="大小">
+                <div class="meta-strong">{{humanSize .Size}}</div>
+              </td>
+              <td data-label="预览">
+                <a href="/s/{{.ShareCode}}" target="_blank" rel="noreferrer" class="text-link-strong">打开分享页</a>
+              </td>
+              <td class="share-link-cell" data-label="分享">
+                <div class="share-stack">
+                  {{if .PasswordProtected}}
+                  <div class="share-block">
+                    <span class="share-label">URL 携带密码链接</span>
+                    <code>{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}</code>
+                    <div class="button-row">
+                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}">复制带密码链接</button>
+                    </div>
+                  </div>
+                  <div class="share-block">
+                    <span class="share-label">分享密码</span>
+                    <code>{{.SharePassword}}</code>
+                    <div class="button-row">
+                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.SharePassword}}">复制密码</button>
+                    </div>
+                  </div>
+                  {{else}}
+                  <div class="share-block">
+                    <span class="share-label">普通链接</span>
+                    <code>{{$.BaseURL}}/s/{{.ShareCode}}</code>
+                    <div class="button-row">
+                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{$.BaseURL}}/s/{{.ShareCode}}">复制普通链接</button>
+                    </div>
+                  </div>
+                  {{end}}
+                </div>
+              </td>
+              <td data-label="创建时间">{{formatTime .CreatedAt}}</td>
+              <td data-label="操作">
+                <form method="post" action="/admin/items/{{.ID}}/delete" onsubmit="return confirm('确认删除这个资源吗？');">
+                  <input type="hidden" name="page" value="{{$.CurrentPage}}">
+                  <button type="submit" class="danger-btn">删除</button>
+                </form>
+              </td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+
+      {{if gt .TotalPages 1}}
+      <nav class="pagination pagination-bottom" aria-label="资源列表分页">
+        <a href="/admin?page={{.PrevPage}}" class="page-link {{if eq .CurrentPage 1}}page-link-disabled{{end}}">上一页</a>
+        {{range .PageNumbers}}
+        <a href="/admin?page={{.}}" class="page-link {{if eq $.CurrentPage .}}page-link-current{{end}}">{{.}}</a>
+        {{end}}
+        <a href="/admin?page={{.NextPage}}" class="page-link {{if eq .CurrentPage .TotalPages}}page-link-disabled{{end}}">下一页</a>
+      </nav>
+      {{end}}
+      {{end}}
+    </section>
+  </main>
+
+  {{if .Flash.ShareURL}}
+  <div class="modal-backdrop" id="shareModal">
+    <section class="modal-card share-result" data-auto-copy="{{.Flash.AutoCopy}}">
+      <div class="share-result-head">
+        <div>
+          <h3>分享已创建</h3>
+          <p>已自动复制最适合直接转发的链接到剪切板。</p>
+        </div>
+        <button type="button" class="ghost-btn compact-btn" data-close-modal>关闭</button>
+      </div>
+
+      <div class="share-result-grid">
+        <div class="share-result-item">
+          <span>普通分享链接</span>
+          <code>{{.Flash.ShareURL}}</code>
+          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.ShareURL}}">复制普通链接</button>
+        </div>
+
+        {{if .Flash.PasswordURL}}
+        <div class="share-result-item">
+          <span>URL 携带密码链接</span>
+          <code>{{.Flash.PasswordURL}}</code>
+          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.PasswordURL}}">复制带密码链接</button>
+        </div>
+        {{end}}
+
+        {{if .Flash.DirectURL}}
+        <div class="share-result-item">
+          <span>快捷直达链接</span>
+          <code>{{.Flash.DirectURL}}</code>
+          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.DirectURL}}">复制直达链接</button>
+        </div>
+        {{end}}
+
+        {{if .Flash.SharePassword}}
+        <div class="share-result-item">
+          <span>分享密码</span>
+          <code>{{.Flash.SharePassword}}</code>
+          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.SharePassword}}">复制密码</button>
+        </div>
+        {{end}}
+      </div>
+    </section>
+  </div>
+  {{end}}
+
+  <div class="copy-toast" id="copyToast" hidden>已复制到剪切板</div>
+
+  <script>
+    (() => {
+      const toast = document.getElementById("copyToast");
+
+      const showToast = (text) => {
+        if (!toast) return;
+        toast.textContent = text;
+        toast.hidden = false;
+        clearTimeout(showToast.timer);
+        showToast.timer = setTimeout(() => {
+          toast.hidden = true;
+        }, 1800);
+      };
+
+      const copyText = async (value, successText) => {
+        if (!value) return;
+        try {
+          await navigator.clipboard.writeText(value);
+          showToast(successText || "已复制到剪切板");
+        } catch (_) {
+          const area = document.createElement("textarea");
+          area.value = value;
+          area.setAttribute("readonly", "");
+          area.style.position = "absolute";
+          area.style.left = "-9999px";
+          document.body.appendChild(area);
+          area.select();
+          document.execCommand("copy");
+          document.body.removeChild(area);
+          showToast(successText || "已复制到剪切板");
+        }
+      };
+
+      document.querySelectorAll("[data-generate-password]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const input = button.parentElement.querySelector("[data-password-input]");
+          if (!input) return;
+          const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+          const array = new Uint32Array(8);
+          crypto.getRandomValues(array);
+          input.value = Array.from(array, (n) => chars[n % chars.length]).join("");
+          input.focus();
+          copyText(input.value, "随机密码已生成并复制");
+        });
+      });
+
+      document.querySelectorAll(".js-copy").forEach((button) => {
+        button.addEventListener("click", () => {
+          copyText(button.dataset.copyValue, "分享内容已复制");
+        });
+      });
+
+      const result = document.querySelector("[data-auto-copy]");
+      if (result && result.dataset.autoCopy) {
+        copyText(result.dataset.autoCopy, "分享链接已自动复制");
+      }
+
+      const modal = document.getElementById("shareModal");
+      if (modal) {
+        modal.addEventListener("click", (event) => {
+          if (event.target === modal) {
+            modal.remove();
+          }
+        });
+        modal.querySelectorAll("[data-close-modal]").forEach((button) => {
+          button.addEventListener("click", () => modal.remove());
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
+{{end}}

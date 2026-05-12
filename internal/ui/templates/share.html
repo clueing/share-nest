@@ -1,0 +1,75 @@
+{{define "share"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{.Item.Name}} | {{.SiteName}}</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="share-page">
+  <main class="share-shell">
+    <header class="share-header">
+      <div>
+        <p class="eyebrow">分享资源</p>
+        <h1>{{.Item.Name}}</h1>
+        <div class="share-summary">
+          <span>{{.Item.Kind}}</span>
+          <span>{{humanSize .Item.Size}}</span>
+          <span>{{formatTime .Item.CreatedAt}}</span>
+        </div>
+      </div>
+      {{if not .Locked}}
+      <a href="{{.DownloadURL}}" class="primary-btn">下载</a>
+      {{end}}
+    </header>
+
+    {{if .Error}}
+    <div class="notice notice-error">{{.Error}}</div>
+    {{end}}
+
+    {{if .Locked}}
+    <section class="panel">
+      <div class="panel-head">
+        <h2>输入访问密码</h2>
+        <p>这个分享受密码保护，支持手动输入或通过带密码链接直接打开。</p>
+      </div>
+      <form method="post" action="/s/{{.Item.ShareCode}}/verify" class="stack-form narrow-form">
+        <label>
+          <span>密码</span>
+          <input type="password" name="password" placeholder="请输入分享密码" required>
+        </label>
+        <button type="submit" class="primary-btn">验证并查看</button>
+      </form>
+    </section>
+    {{else}}
+    <section class="panel preview-panel">
+      {{if eq .PreviewMode "text"}}
+      <pre class="text-preview">{{.TextPreview}}</pre>
+      {{if .Truncated}}
+      <p class="preview-note">内容较长，当前仅展示前 {{humanSize .PreviewLimit}}。</p>
+      {{end}}
+      {{else if eq .PreviewMode "image"}}
+      <img src="{{.RawURL}}" alt="{{.Item.Name}}" class="media-preview">
+      {{else if eq .PreviewMode "pdf"}}
+      <iframe src="{{.RawURL}}" class="pdf-preview" title="{{.Item.Name}}"></iframe>
+      {{else if eq .PreviewMode "audio"}}
+      <audio controls preload="metadata" class="player-preview">
+        <source src="{{.RawURL}}" type="{{.Item.MIMEType}}">
+      </audio>
+      {{else if eq .PreviewMode "video"}}
+      <video controls preload="metadata" class="video-preview">
+        <source src="{{.RawURL}}" type="{{.Item.MIMEType}}">
+      </video>
+      {{else}}
+      <div class="empty-state">
+        当前格式暂不支持在线预览，请直接下载查看。
+      </div>
+      {{end}}
+    </section>
+    {{end}}
+  </main>
+</body>
+</html>
+{{end}}

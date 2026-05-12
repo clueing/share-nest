@@ -1,0 +1,37 @@
+{{define "login"}}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录 | {{.SiteName}}</title>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="auth-page">
+  <main class="auth-card">
+    <div class="brand">
+      <span class="brand-mark">FS</span>
+      <div>
+        <h1>{{.SiteName}}</h1>
+        <p>轻量、可预览、可分享</p>
+      </div>
+    </div>
+    {{if .Error}}
+    <div class="notice notice-error">{{.Error}}</div>
+    {{end}}
+    <form method="post" action="/login" class="stack-form">
+      <label>
+        <span>用户名</span>
+        <input type="text" name="username" placeholder="admin" required>
+      </label>
+      <label>
+        <span>密码</span>
+        <input type="password" name="password" placeholder="请输入密码" required>
+      </label>
+      <button type="submit" class="primary-btn">登录后台</button>
+    </form>
+  </main>
+</body>
+</html>
+{{end}}
