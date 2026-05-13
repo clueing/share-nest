@@ -12,7 +12,7 @@
 <body class="auth-page"{{if .Error}} data-page-notice="{{.Error}}" data-page-notice-type="error"{{end}}>
   <main class="auth-card">
     <div class="brand">
-      <span class="brand-mark">FS</span>
+      <span class="brand-mark">ShareN</span>
       <div>
         <h1>{{.SiteName}}</h1>
         <p>轻量、可预览、可分享</p>
@@ -21,7 +21,7 @@
     <form method="post" action="/login" class="stack-form">
       <label>
         <span>用户名</span>
-        <input type="text" name="username" placeholder="admin" required>
+        <input type="text" name="username" placeholder="请输入用户名" required>
       </label>
       <label>
         <span>密码</span>
