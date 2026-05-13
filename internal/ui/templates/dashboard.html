@@ -26,7 +26,7 @@
         <h2>上传文件</h2>
         <p>上传后自动生成分享链接。</p>
       </div>
-      <form method="post" action="/admin/upload" enctype="multipart/form-data" class="stack-form">
+      <form method="post" action="/admin/upload" enctype="multipart/form-data" class="stack-form" data-upload-form>
         <input type="hidden" name="page" value="{{.CurrentPage}}">
         <div class="dropzone" data-dropzone>
           <span class="field-label">选择文件</span>
@@ -53,7 +53,16 @@
             <input type="number" name="max_downloads" min="0" placeholder="0 表示不限">
           </label>
         </div>
-        <button type="submit" class="primary-btn">上传并生成分享</button>
+        <div class="upload-progress" data-upload-progress hidden aria-live="polite">
+          <div class="upload-progress-head">
+            <span data-upload-status>准备上传文件</span>
+            <span data-upload-percent>0%</span>
+          </div>
+          <div class="upload-progress-track">
+            <div class="upload-progress-bar" data-upload-bar></div>
+          </div>
+        </div>
+        <button type="submit" class="primary-btn" data-upload-submit>上传并生成分享</button>
       </form>
     </section>
 
@@ -337,6 +346,118 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", () => {
+      const dashboardFlashKey = "fs_dashboard_flash";
+
+      const bindCopyButtons = (root = document) => {
+        root.querySelectorAll(".js-copy").forEach((button) => {
+          if (button.dataset.copyBound === "true") return;
+          button.dataset.copyBound = "true";
+          button.addEventListener("click", () => {
+            const message = button.dataset.copyMessage || "复制成功";
+            window.AppUI.copyText(button.dataset.copyValue, message);
+          });
+        });
+      };
+
+      const bindShareModal = (modal) => {
+        if (!modal || modal.dataset.modalBound === "true") return;
+        modal.dataset.modalBound = "true";
+        modal.addEventListener("click", (event) => {
+          if (event.target === modal) {
+            modal.remove();
+          }
+        });
+        modal.querySelectorAll("[data-close-modal]").forEach((button) => {
+          button.addEventListener("click", () => modal.remove());
+        });
+        bindCopyButtons(modal);
+      };
+
+      const createShareResultItem = (label, value, buttonText, copyMessage) => {
+        const item = document.createElement("div");
+        item.className = "share-result-item";
+
+        const title = document.createElement("span");
+        title.textContent = label;
+        item.appendChild(title);
+
+        const code = document.createElement("code");
+        code.textContent = value;
+        item.appendChild(code);
+
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "ghost-btn compact-btn js-copy";
+        button.dataset.copyValue = value;
+        button.dataset.copyMessage = copyMessage;
+        button.textContent = buttonText;
+        item.appendChild(button);
+
+        return item;
+      };
+
+      const openShareResultModal = (flash, { notify = false, autoCopy = true } = {}) => {
+        if (!flash || !flash.share_url) return;
+
+        document.getElementById("shareModal")?.remove();
+
+        const modal = document.createElement("div");
+        modal.className = "modal-backdrop";
+        modal.id = "shareModal";
+
+        const card = document.createElement("section");
+        card.className = "modal-card share-result";
+
+        const head = document.createElement("div");
+        head.className = "share-result-head";
+        const headCopy = document.createElement("div");
+        const title = document.createElement("h3");
+        title.textContent = "分享已创建";
+        const desc = document.createElement("p");
+        desc.textContent = "已自动复制最适合直接转发的链接到剪切板。";
+        headCopy.append(title, desc);
+        const closeButton = document.createElement("button");
+        closeButton.type = "button";
+        closeButton.className = "ghost-btn compact-btn";
+        closeButton.setAttribute("data-close-modal", "");
+        closeButton.textContent = "关闭";
+        head.append(headCopy, closeButton);
+
+        const grid = document.createElement("div");
+        grid.className = "share-result-grid";
+        grid.appendChild(createShareResultItem("普通分享链接", flash.share_url, "复制普通链接", "已复制普通分享链接"));
+
+        if (flash.password_url) {
+          grid.appendChild(createShareResultItem("URL 携带密码链接", flash.password_url, "复制带密码链接", "已复制带密码分享链接"));
+        }
+        if (flash.direct_url) {
+          grid.appendChild(createShareResultItem("快捷直达链接", flash.direct_url, "复制直达链接", "已复制直达分享链接"));
+        }
+        if (flash.share_password) {
+          grid.appendChild(createShareResultItem("分享密码", flash.share_password, "复制密码", "已复制分享密码"));
+        }
+
+        card.append(head, grid);
+        modal.appendChild(card);
+        document.body.appendChild(modal);
+        bindShareModal(modal);
+
+        if (notify && flash.message) {
+          window.AppUI.notify({ message: flash.message, type: "success" });
+        }
+        if (autoCopy && flash.auto_copy) {
+          window.AppUI.copyText(flash.auto_copy, "分享链接已自动复制");
+        }
+      };
+
+      try {
+        const pendingFlash = window.sessionStorage.getItem(dashboardFlashKey);
+        if (pendingFlash) {
+          window.sessionStorage.removeItem(dashboardFlashKey);
+          openShareResultModal(JSON.parse(pendingFlash), { notify: true, autoCopy: true });
+        }
+      } catch (_) {}
+
       document.querySelectorAll("[data-generate-password]").forEach((button) => {
         button.addEventListener("click", () => {
           const input = button.parentElement.querySelector("[data-password-input]");
@@ -350,12 +471,7 @@
         });
       });
 
-      document.querySelectorAll(".js-copy").forEach((button) => {
-        button.addEventListener("click", () => {
-          const message = button.dataset.copyMessage || "复制成功";
-          window.AppUI.copyText(button.dataset.copyValue, message);
-        });
-      });
+      bindCopyButtons();
 
       const checkboxes = Array.from(document.querySelectorAll(".item-checkbox"));
       const selectedCount = document.getElementById("selectedCount");
@@ -403,19 +519,141 @@
 
       const modal = document.getElementById("shareModal");
       if (modal) {
-        modal.addEventListener("click", (event) => {
-          if (event.target === modal) {
-            modal.remove();
-          }
-        });
-        modal.querySelectorAll("[data-close-modal]").forEach((button) => {
-          button.addEventListener("click", () => modal.remove());
-        });
+        bindShareModal(modal);
+        const result = modal.querySelector("[data-auto-copy]");
+        if (result && result.dataset.autoCopy && window.AppUI) {
+          window.AppUI.copyText(result.dataset.autoCopy, "分享链接已自动复制");
+        }
       }
 
-      const result = document.querySelector("[data-auto-copy]");
-      if (result && result.dataset.autoCopy && window.AppUI) {
-        window.AppUI.copyText(result.dataset.autoCopy, "分享链接已自动复制");
+      const uploadForm = document.querySelector("[data-upload-form]");
+      if (uploadForm && window.XMLHttpRequest && window.FormData) {
+        const progressWrap = uploadForm.querySelector("[data-upload-progress]");
+        const progressBar = uploadForm.querySelector("[data-upload-bar]");
+        const progressPercent = uploadForm.querySelector("[data-upload-percent]");
+        const progressStatus = uploadForm.querySelector("[data-upload-status]");
+        const submitButton = uploadForm.querySelector("[data-upload-submit]");
+
+        const setUploadState = ({ visible, percent, status, disabled, indeterminate }) => {
+          if (progressWrap) {
+            progressWrap.hidden = !visible;
+            progressWrap.classList.toggle("upload-progress-indeterminate", Boolean(indeterminate));
+          }
+          if (progressBar && typeof percent === "number") {
+            progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+          }
+          if (progressPercent && typeof percent === "number") {
+            progressPercent.textContent = `${Math.round(percent)}%`;
+          }
+          if (progressStatus && status) {
+            progressStatus.textContent = status;
+          }
+          if (submitButton) {
+            submitButton.disabled = Boolean(disabled);
+            submitButton.textContent = disabled ? "正在上传..." : "上传并生成分享";
+          }
+        };
+
+        uploadForm.addEventListener("submit", (event) => {
+          event.preventDefault();
+
+          const fileInput = uploadForm.querySelector("[data-drop-input]");
+          if (fileInput && (!fileInput.files || fileInput.files.length === 0)) {
+            window.AppUI.notify({ message: "请先选择要上传的文件", type: "info" });
+            return;
+          }
+
+          const xhr = new XMLHttpRequest();
+          xhr.open(uploadForm.method || "POST", uploadForm.action);
+          xhr.responseType = "json";
+          xhr.setRequestHeader("Accept", "application/json");
+          xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+
+          setUploadState({
+            visible: true,
+            percent: 0,
+            status: "准备上传文件",
+            disabled: true,
+            indeterminate: false,
+          });
+
+          xhr.upload.addEventListener("progress", (progressEvent) => {
+            if (progressEvent.lengthComputable && progressEvent.total > 0) {
+              const percent = (progressEvent.loaded / progressEvent.total) * 100;
+              setUploadState({
+                visible: true,
+                percent,
+                status: percent >= 100 ? "文件已上传，正在生成分享链接" : "正在上传文件",
+                disabled: true,
+                indeterminate: false,
+              });
+              return;
+            }
+            setUploadState({
+              visible: true,
+              percent: 35,
+              status: "正在上传文件",
+              disabled: true,
+              indeterminate: true,
+            });
+          });
+
+          xhr.addEventListener("load", () => {
+            const result = xhr.response;
+            if (xhr.status >= 200 && xhr.status < 300 && result && result.ok) {
+              setUploadState({
+                visible: true,
+                percent: 100,
+                status: "上传完成，正在刷新列表",
+                disabled: true,
+                indeterminate: false,
+              });
+              if (result.flash) {
+                try {
+                  window.sessionStorage.setItem(dashboardFlashKey, JSON.stringify(result.flash));
+                } catch (_) {}
+              }
+              window.location.assign(result.redirect || uploadForm.dataset.currentTarget || "/admin");
+              return;
+            }
+
+            setUploadState({
+              visible: false,
+              percent: 0,
+              status: "准备上传文件",
+              disabled: false,
+              indeterminate: false,
+            });
+            window.AppUI.notify({
+              message: result?.message || "上传失败，请稍后重试。",
+              type: "error",
+            });
+          });
+
+          xhr.addEventListener("error", () => {
+            setUploadState({
+              visible: false,
+              percent: 0,
+              status: "准备上传文件",
+              disabled: false,
+              indeterminate: false,
+            });
+            window.AppUI.notify({ message: "上传失败，请检查网络后重试。", type: "error" });
+          });
+
+          xhr.addEventListener("abort", () => {
+            setUploadState({
+              visible: false,
+              percent: 0,
+              status: "准备上传文件",
+              disabled: false,
+              indeterminate: false,
+            });
+            window.AppUI.notify({ message: "上传已取消。", type: "info" });
+          });
+
+          xhr.send(new FormData(uploadForm));
+        });
       }
 
       document.querySelectorAll("[data-dropzone]").forEach((dropzone) => {

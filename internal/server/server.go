@@ -87,6 +87,13 @@ type flashData struct {
 	AutoCopy      string `json:"auto_copy"`
 }
 
+type actionResponse struct {
+	OK       bool       `json:"ok"`
+	Message  string     `json:"message,omitempty"`
+	Redirect string     `json:"redirect,omitempty"`
+	Flash    *flashData `json:"flash,omitempty"`
+}
+
 type preparedContent struct {
 	file    *os.File
 	modTime time.Time
@@ -266,7 +273,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxUploadSize)
 	reader, err := r.MultipartReader()
 	if err != nil {
-		s.redirectAdminMessageAtPage(w, r, 1, flashData{Message: "上传文件失败：文件过大或表单格式错误"})
+		s.respondAdminAction(w, r, 1, http.StatusBadRequest, flashData{Message: "上传文件失败：文件过大或表单格式错误"}, false)
 		return
 	}
 
@@ -290,7 +297,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			if path != "" {
 				_ = s.storage.Remove(path)
 			}
-			s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：表单读取异常"})
+			s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：表单读取异常"}, false)
 			return
 		}
 
@@ -321,33 +328,33 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			if path != "" {
 				_ = s.storage.Remove(path)
 			}
-			s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：无法保存文件"})
+			s.respondAdminAction(w, r, currentPage, http.StatusInternalServerError, flashData{Message: "上传文件失败：无法保存文件"}, false)
 			return
 		}
 	}
 
 	if !fileChosen {
 		slog.Warn("上传被取消或未选择文件", "请求ID", requestIDFromContext(r))
-		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：未选择文件"})
+		s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：未选择文件"}, false)
 		return
 	}
 
 	passwordHash, err := s.hashOptionalPassword(sharePassword)
 	if err != nil {
 		_ = s.storage.Remove(path)
-		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：密码处理异常"})
+		s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：密码处理异常"}, false)
 		return
 	}
 	expiresAt, err := parseOptionalDateTimeLocal(expiresAtValue)
 	if err != nil {
 		_ = s.storage.Remove(path)
-		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：过期时间格式错误"})
+		s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：过期时间格式错误"}, false)
 		return
 	}
 	maxDownloads, err := parseNonNegativeInt(maxDownloadsValue)
 	if err != nil {
 		_ = s.storage.Remove(path)
-		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：下载次数限制格式错误"})
+		s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：下载次数限制格式错误"}, false)
 		return
 	}
 
@@ -368,7 +375,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			"文件名", fileName,
 			"错误", err,
 		)
-		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：数据库写入异常"})
+		s.respondAdminAction(w, r, currentPage, http.StatusInternalServerError, flashData{Message: "上传文件失败：数据库写入异常"}, false)
 		return
 	}
 	slog.Info("文件上传成功",
@@ -380,7 +387,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		"下载限制", maxDownloads,
 	)
 
-	s.redirectAdminMessageAtPage(w, r, currentPage, s.buildSuccessFlash(r, summary, sharePassword, "文件已上传并生成分享链接"))
+	s.respondAdminAction(w, r, currentPage, http.StatusOK, s.buildSuccessFlash(r, summary, sharePassword, "文件已上传并生成分享链接"), true)
 }
 
 func (s *Server) handleCreateText(w http.ResponseWriter, r *http.Request) {
@@ -910,11 +917,32 @@ func (s *Server) redirectAdminMessage(w http.ResponseWriter, r *http.Request, fl
 
 func (s *Server) redirectAdminMessageAtPage(w http.ResponseWriter, r *http.Request, page int, flash flashData) {
 	s.writeFlash(w, r, flash)
+	http.Redirect(w, r, s.adminPageTarget(page), http.StatusSeeOther)
+}
+
+func (s *Server) adminPageTarget(page int) string {
 	target := "/admin"
 	if page > 1 {
 		target += "?page=" + strconv.Itoa(page)
 	}
-	http.Redirect(w, r, target, http.StatusSeeOther)
+	return target
+}
+
+func (s *Server) respondAdminAction(w http.ResponseWriter, r *http.Request, page, status int, flash flashData, includeFlash bool) {
+	if s.wantsJSON(r) {
+		resp := actionResponse{
+			OK:       status < 400,
+			Message:  flash.Message,
+			Redirect: s.adminPageTarget(page),
+		}
+		if includeFlash {
+			flashCopy := flash
+			resp.Flash = &flashCopy
+		}
+		s.writeJSON(w, status, resp)
+		return
+	}
+	s.redirectAdminMessageAtPage(w, r, page, flash)
 }
 
 func (s *Server) render(w http.ResponseWriter, name string, data any, status int) {
@@ -927,6 +955,17 @@ func (s *Server) render(w http.ResponseWriter, name string, data any, status int
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_, _ = w.Write(buf.Bytes())
+}
+
+func (s *Server) writeJSON(w http.ResponseWriter, status int, data any) {
+	payload, err := json.Marshal(data)
+	if err != nil {
+		http.Error(w, "JSON 响应失败", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = w.Write(payload)
 }
 
 func (s *Server) baseURL(r *http.Request) string {
@@ -1362,6 +1401,16 @@ func (s *Server) isHTTPSRequest(r *http.Request) bool {
 		return true
 	}
 	return strings.HasPrefix(strings.ToLower(s.cfg.BaseURL), "https://")
+}
+
+func (s *Server) wantsJSON(r *http.Request) bool {
+	if r == nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Requested-With")), "XMLHttpRequest") {
+		return true
+	}
+	return strings.Contains(strings.ToLower(r.Header.Get("Accept")), "application/json")
 }
 
 func readMultipartValue(part *multipart.Part, limit int64) string {
