@@ -48,6 +48,25 @@ var textExts = map[string]struct{}{
 	"css":  {},
 }
 
+var audioExts = map[string]struct{}{
+	"mp3":  {},
+	"wav":  {},
+	"ogg":  {},
+	"oga":  {},
+	"m4a":  {},
+	"aac":  {},
+	"flac": {},
+	"opus": {},
+}
+
+var videoExts = map[string]struct{}{
+	"mp4":  {},
+	"m4v":  {},
+	"webm": {},
+	"ogv":  {},
+	"mov":  {},
+}
+
 func Detect(kind, mimeType, name string) Mode {
 	if kind == "text" {
 		return ModeText
@@ -64,6 +83,12 @@ func Detect(kind, mimeType, name string) Mode {
 	}
 	if strings.HasPrefix(mimeType, "text/") {
 		return ModeText
+	}
+	if _, ok := audioExts[ext]; ok {
+		return ModeAudio
+	}
+	if _, ok := videoExts[ext]; ok {
+		return ModeVideo
 	}
 	if strings.HasPrefix(mimeType, "image/") {
 		return ModeImage

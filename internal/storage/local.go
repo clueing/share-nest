@@ -62,10 +62,41 @@ func (l *Local) SaveUploadedFile(file io.Reader, originalName string) (relativeP
 	}
 
 	mimeType = http.DetectContentType(head[:n])
-	if ext == ".svg" {
-		mimeType = "image/svg+xml"
+	if override, ok := mimeByExtension(ext); ok {
+		mimeType = override
 	}
 	return relativePath, mimeType, hex.EncodeToString(hash.Sum(nil)), written, nil
+}
+
+func mimeByExtension(ext string) (string, bool) {
+	switch ext {
+	case ".svg":
+		return "image/svg+xml", true
+	case ".mp3":
+		return "audio/mpeg", true
+	case ".wav":
+		return "audio/wav", true
+	case ".ogg", ".oga":
+		return "audio/ogg", true
+	case ".m4a":
+		return "audio/mp4", true
+	case ".aac":
+		return "audio/aac", true
+	case ".flac":
+		return "audio/flac", true
+	case ".opus":
+		return "audio/opus", true
+	case ".mp4", ".m4v":
+		return "video/mp4", true
+	case ".webm":
+		return "video/webm", true
+	case ".ogv":
+		return "video/ogg", true
+	case ".mov":
+		return "video/quicktime", true
+	default:
+		return "", false
+	}
 }
 
 func (l *Local) Open(relativePath string) (*os.File, error) {

@@ -1051,6 +1051,15 @@ tbody tr:hover {
   padding: var(--space-6);
 }
 
+.player-embed {
+  display: block;
+  width: 100%;
+}
+
+.player-preview .preview-note {
+  margin: 12px 0 0;
+}
+
 @media (max-width: 960px) {
   .dashboard-grid {
     grid-template-columns: 1fr;

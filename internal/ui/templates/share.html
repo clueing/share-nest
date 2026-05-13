@@ -92,13 +92,19 @@
       {{else if eq .PreviewMode "pdf"}}
       <iframe src="{{.RawURL}}" class="pdf-preview" title="{{.Item.Name}}"></iframe>
       {{else if eq .PreviewMode "audio"}}
-      <audio controls preload="metadata" class="player-preview">
-        <source src="{{.RawURL}}" type="{{.Item.MIMEType}}">
-      </audio>
+      <div class="player-preview">
+        <audio controls preload="metadata" class="player-embed">
+          <source src="{{.RawURL}}" type="{{.Item.MIMEType}}">
+        </audio>
+        <p class="preview-note">支持常见音频格式预览；如果浏览器无法播放，请直接下载查看。</p>
+      </div>
       {{else if eq .PreviewMode "video"}}
-      <video controls preload="metadata" class="video-preview">
-        <source src="{{.RawURL}}" type="{{.Item.MIMEType}}">
-      </video>
+      <div class="player-preview">
+        <video controls preload="metadata" class="video-preview">
+          <source src="{{.RawURL}}" type="{{.Item.MIMEType}}">
+        </video>
+        <p class="preview-note">支持常见视频格式预览；如果浏览器无法播放，请直接下载查看。</p>
+      </div>
       {{else}}
       <div class="empty-state">
         当前格式暂不支持在线预览，请直接下载查看。
