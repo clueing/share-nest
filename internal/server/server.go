@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -10,11 +11,13 @@ import (
 	"html/template"
 	"io"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"file-service/internal/config"
@@ -35,6 +38,7 @@ type Server struct {
 	storage   *storage.Local
 	templates *template.Template
 	mux       *http.ServeMux
+	reqSeq    atomic.Uint64
 }
 
 type dashboardData struct {
@@ -121,7 +125,7 @@ func New(cfg config.Config, repo *repo.SQLiteRepo, fileStorage *storage.Local) (
 }
 
 func (s *Server) Handler() http.Handler {
-	return s.mux
+	return s.withMiddlewares(s.mux)
 }
 
 func (s *Server) routes(staticFS http.FileSystem) {
@@ -257,6 +261,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
+		slog.Warn("上传被取消或未选择文件", "请求ID", requestIDFromContext(r))
 		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：未选择文件"})
 		return
 	}
@@ -296,9 +301,22 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	summary, err := s.repo.CreateItemWithShare(r.Context(), item, passwordHash, sharePassword, expiresAt, maxDownloads)
 	if err != nil {
 		_ = s.storage.Remove(path)
+		slog.Error("上传文件后创建分享失败",
+			"请求ID", requestIDFromContext(r),
+			"文件名", header.Filename,
+			"错误", err,
+		)
 		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：数据库写入异常"})
 		return
 	}
+	slog.Info("文件上传成功",
+		"请求ID", requestIDFromContext(r),
+		"资源ID", summary.ID,
+		"文件名", header.Filename,
+		"大小", size,
+		"过期时间", formatTimePtr(expiresAt),
+		"下载限制", maxDownloads,
+	)
 
 	s.redirectAdminMessage(w, r, s.buildSuccessFlash(r, summary, sharePassword, "文件已上传并生成分享链接"))
 }
@@ -348,9 +366,22 @@ func (s *Server) handleCreateText(w http.ResponseWriter, r *http.Request) {
 	}
 	summary, err := s.repo.CreateItemWithShare(r.Context(), item, passwordHash, sharePassword, expiresAt, maxDownloads)
 	if err != nil {
+		slog.Error("创建文本分享失败",
+			"请求ID", requestIDFromContext(r),
+			"名称", name,
+			"错误", err,
+		)
 		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：数据库写入异常"})
 		return
 	}
+	slog.Info("文本分享已创建",
+		"请求ID", requestIDFromContext(r),
+		"资源ID", summary.ID,
+		"名称", name,
+		"大小", item.Size,
+		"过期时间", formatTimePtr(expiresAt),
+		"下载限制", maxDownloads,
+	)
 
 	s.redirectAdminMessage(w, r, s.buildSuccessFlash(r, summary, sharePassword, "文本已保存并生成分享链接"))
 }
@@ -375,6 +406,12 @@ func (s *Server) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
 	if item.StoragePath != "" {
 		_ = s.storage.Remove(item.StoragePath)
 	}
+	slog.Info("资源已删除",
+		"请求ID", requestIDFromContext(r),
+		"资源ID", item.ID,
+		"名称", item.Name,
+		"类型", item.Kind,
+	)
 	s.redirectAdminMessage(w, r, flashData{Message: "资源已删除"})
 }
 
@@ -420,6 +457,10 @@ func (s *Server) handleBatchDelete(w http.ResponseWriter, r *http.Request) {
 			_ = s.storage.Remove(item.StoragePath)
 		}
 	}
+	slog.Info("批量删除完成",
+		"请求ID", requestIDFromContext(r),
+		"数量", len(items),
+	)
 
 	s.redirectAdminMessage(w, r, flashData{Message: fmt.Sprintf("已批量删除 %d 个资源", len(items))})
 }
@@ -1011,7 +1052,7 @@ func maxInt(a, b int) int {
 }
 
 func (s *Server) logAccess(r *http.Request, item model.SharedItem, eventType, status, message string) {
-	_ = s.repo.CreateAccessLog(r.Context(), model.AccessLog{
+	if err := s.repo.CreateAccessLog(r.Context(), model.AccessLog{
 		ShareCode: item.ShareCode,
 		ItemName:  item.Name,
 		EventType: eventType,
@@ -1019,7 +1060,28 @@ func (s *Server) logAccess(r *http.Request, item model.SharedItem, eventType, st
 		Message:   message,
 		ClientIP:  clientIP(r),
 		UserAgent: firstNonEmpty(strings.TrimSpace(r.UserAgent()), "-"),
-	})
+	}); err != nil {
+		slog.Error("写入访问日志失败",
+			"请求ID", requestIDFromContext(r),
+			"分享码", item.ShareCode,
+			"事件", eventType,
+			"状态", status,
+			"错误", err,
+		)
+		return
+	}
+
+	if status == "denied" || status == "error" {
+		slog.Warn("分享访问受限",
+			"请求ID", requestIDFromContext(r),
+			"分享码", item.ShareCode,
+			"资源", item.Name,
+			"事件", eventType,
+			"状态", status,
+			"说明", message,
+			"来源IP", clientIP(r),
+		)
+	}
 }
 
 func clientIP(r *http.Request) string {
@@ -1034,4 +1096,114 @@ func clientIP(r *http.Request) string {
 		return r.RemoteAddr[:index]
 	}
 	return r.RemoteAddr
+}
+
+type ctxKey string
+
+const requestIDKey ctxKey = "request_id"
+
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(status int) {
+	lrw.status = status
+	lrw.ResponseWriter.WriteHeader(status)
+}
+
+func (lrw *loggingResponseWriter) Write(data []byte) (int, error) {
+	if lrw.status == 0 {
+		lrw.status = http.StatusOK
+	}
+	n, err := lrw.ResponseWriter.Write(data)
+	lrw.bytes += n
+	return n, err
+}
+
+func (s *Server) withMiddlewares(next http.Handler) http.Handler {
+	return s.recoverMiddleware(s.requestLogMiddleware(next))
+}
+
+func (s *Server) requestLogMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := s.nextRequestID()
+		ctx := withRequestID(r.Context(), requestID)
+		r = r.WithContext(ctx)
+
+		start := time.Now()
+		lrw := &loggingResponseWriter{ResponseWriter: w}
+		lrw.Header().Set("X-Request-Id", requestID)
+
+		next.ServeHTTP(lrw, r)
+
+		status := lrw.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+
+		level := slog.LevelInfo
+		if status >= 500 {
+			level = slog.LevelError
+		} else if status >= 400 {
+			level = slog.LevelWarn
+		}
+
+		slog.Log(ctx, level, "请求完成",
+			"请求ID", requestID,
+			"方法", r.Method,
+			"路径", requestPath(r),
+			"状态码", status,
+			"耗时毫秒", time.Since(start).Milliseconds(),
+			"来源IP", clientIP(r),
+		)
+	})
+}
+
+func (s *Server) recoverMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				slog.Error("服务内部异常",
+					"请求ID", requestIDFromContext(r),
+					"方法", r.Method,
+					"路径", requestPath(r),
+					"来源IP", clientIP(r),
+					"异常", recovered,
+				)
+				http.Error(w, "服务器内部错误", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) nextRequestID() string {
+	return fmt.Sprintf("req-%06d", s.reqSeq.Add(1))
+}
+
+func withRequestID(ctx context.Context, requestID string) context.Context {
+	return context.WithValue(ctx, requestIDKey, requestID)
+}
+
+func requestIDFromContext(r *http.Request) string {
+	if value, ok := r.Context().Value(requestIDKey).(string); ok && value != "" {
+		return value
+	}
+	return "-"
+}
+
+func formatTimePtr(value *time.Time) string {
+	if value == nil {
+		return "-"
+	}
+	return value.Local().Format("2006-01-02 15:04")
+}
+
+func requestPath(r *http.Request) string {
+	if r.URL.RawQuery == "" {
+		return r.URL.Path
+	}
+	return r.URL.Path + "?" + r.URL.RawQuery
 }
