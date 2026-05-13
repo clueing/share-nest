@@ -155,8 +155,34 @@
       <div class="empty-state">当前压缩包暂时无法解析，请直接下载查看。</div>
       {{end}}
       {{else}}
-      <div class="empty-state">
-        当前格式暂不支持在线预览，请直接下载查看。
+      <div class="binary-meta-preview">
+        <p class="preview-note binary-meta-note">当前格式暂不支持内容预览，已展示基础元信息，你仍然可以直接下载查看。</p>
+        <div class="binary-meta-grid">
+          <div class="binary-meta-card">
+            <span>文件名</span>
+            <strong>{{.Item.Name}}</strong>
+          </div>
+          <div class="binary-meta-card">
+            <span>大小</span>
+            <strong>{{humanSize .Item.Size}}</strong>
+          </div>
+          <div class="binary-meta-card">
+            <span>MIME</span>
+            <strong>{{if .Item.MIMEType}}{{.Item.MIMEType}}{{else}}未知{{end}}</strong>
+          </div>
+          <div class="binary-meta-card">
+            <span>扩展名</span>
+            <strong>{{if .Item.Ext}}.{{.Item.Ext}}{{else}}无扩展名{{end}}</strong>
+          </div>
+          <div class="binary-meta-card">
+            <span>上传时间</span>
+            <strong>{{formatTime .Item.CreatedAt}}</strong>
+          </div>
+          <div class="binary-meta-card binary-meta-card-wide">
+            <span>SHA-256</span>
+            <strong class="binary-meta-hash">{{if .Item.SHA256}}{{.Item.SHA256}}{{else}}未生成{{end}}</strong>
+          </div>
+        </div>
       </div>
       {{end}}
     </section>

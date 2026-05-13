@@ -756,6 +756,54 @@ tbody tr:hover {
   background: var(--bg-subtle);
 }
 
+.binary-meta-preview {
+  padding: var(--space-6);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.binary-meta-note {
+  margin: 0;
+}
+
+.binary-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.binary-meta-card {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-subtle);
+  min-width: 0;
+}
+
+.binary-meta-card-wide {
+  grid-column: 1 / -1;
+}
+
+.binary-meta-card span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.binary-meta-card strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.binary-meta-hash {
+  font-family: "SFMono-Regular", "Cascadia Code", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 12px;
+}
+
 .share-result {
   padding: var(--space-6);
   border-radius: var(--radius-xl);
@@ -1189,6 +1237,10 @@ tbody tr:hover {
   .archive-overview {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .binary-meta-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1312,13 +1364,19 @@ tbody tr:hover {
     gap: 12px;
   }
 
+  .binary-meta-preview {
+    padding: 16px;
+    gap: 12px;
+  }
+
   .archive-overview {
     grid-template-columns: 1fr;
     gap: 10px;
   }
 
   .archive-stat,
-  .archive-entry {
+  .archive-entry,
+  .binary-meta-card {
     padding: 12px 14px;
   }
 
