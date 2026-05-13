@@ -28,16 +28,6 @@
 
 ## 项目预览
 
-截图建议统一放在 `docs/screenshots/` 目录。
-
-你后面把截图放进去即可，README 已经预留好引用位置，建议文件名：
-
-- `docs/screenshots/login.png`
-- `docs/screenshots/dashboard.png`
-- `docs/screenshots/share-text.png`
-- `docs/screenshots/share-file.png`
-- `docs/screenshots/mobile.png`
-
 示例预览区：
 
 ![登录页](docs/screenshots/login.png)
