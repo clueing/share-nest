@@ -67,6 +67,7 @@ type sharePageData struct {
 	Expired      bool
 	NoDownloads  bool
 	CanCopyText  bool
+	DownloadsLeft int
 	PreviewMode  preview.Mode
 	TextPreview  string
 	Truncated    bool
@@ -640,6 +641,7 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 		Expired:      false,
 		NoDownloads:  s.downloadLimitReached(item),
 		CanCopyText:  item.Kind == "text",
+		DownloadsLeft: s.downloadsLeft(item),
 		PreviewMode:  mode,
 		TextPreview:  textPreview,
 		Truncated:    truncated,
@@ -659,6 +661,7 @@ func (s *Server) renderShareLocked(w http.ResponseWriter, item model.SharedItem,
 		Expired:      false,
 		NoDownloads:  false,
 		CanCopyText:  false,
+		DownloadsLeft: s.downloadsLeft(item),
 		PreviewLimit: s.cfg.PreviewLimit,
 	}
 	s.render(w, "share", data, http.StatusOK)
@@ -672,6 +675,7 @@ func (s *Server) renderShareBlocked(w http.ResponseWriter, item model.SharedItem
 		Expired:      expired,
 		NoDownloads:  noDownloads,
 		CanCopyText:  false,
+		DownloadsLeft: s.downloadsLeft(item),
 		PreviewLimit: s.cfg.PreviewLimit,
 	}
 	s.render(w, "share", data, http.StatusOK)
@@ -797,6 +801,18 @@ func (s *Server) shareExpired(item model.SharedItem) bool {
 
 func (s *Server) downloadLimitReached(item model.SharedItem) bool {
 	return item.MaxDownloads > 0 && item.DownloadCount >= item.MaxDownloads
+}
+
+func (s *Server) downloadsLeft(item model.SharedItem) int {
+	if item.MaxDownloads <= 0 {
+		return -1
+	}
+
+	left := item.MaxDownloads - item.DownloadCount
+	if left < 0 {
+		return 0
+	}
+	return left
 }
 
 func (s *Server) hashOptionalPassword(password string) (string, error) {

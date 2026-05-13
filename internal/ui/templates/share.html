@@ -26,7 +26,13 @@
       {{if .NoDownloads}}
       <span class="ghost-btn disabled-btn">下载次数已用尽</span>
       {{else}}
-      <a href="{{.DownloadURL}}" class="primary-btn">下载</a>
+      <button
+        type="button"
+        class="primary-btn"
+        id="downloadShareBtn"
+        data-download-url="{{.DownloadURL}}"
+        data-downloads-left="{{.DownloadsLeft}}"
+      >下载</button>
       {{end}}
       {{end}}
     </header>
@@ -55,7 +61,7 @@
     </section>
     {{else if .NoDownloads}}
     <section class="panel">
-      <div class="empty-state">下载次数已用尽，当前分享不再提供预览或下载。</div>
+      <div class="empty-state">下载次数已用尽，当前分享不再提供预览。</div>
     </section>
     {{else}}
     <section class="panel preview-panel">
@@ -119,6 +125,102 @@
           document.execCommand("copy");
           source.hidden = true;
           showToast("文本内容已复制");
+        }
+      });
+    })();
+  </script>
+  {{end}}
+
+  {{if and (not .Locked) (not .Expired) (not .NoDownloads)}}
+  <script>
+    (() => {
+      const button = document.getElementById("downloadShareBtn");
+      if (!button) return;
+
+      const sharePage = document.querySelector(".share-page");
+      const previewPanel = document.querySelector(".preview-panel");
+      const errorNotice = document.querySelector(".notice-error");
+      const setNotice = (text) => {
+        if (errorNotice) {
+          errorNotice.textContent = text;
+          return;
+        }
+        const header = document.querySelector(".share-header");
+        if (!header) return;
+        const notice = document.createElement("div");
+        notice.className = "notice notice-error";
+        notice.textContent = text;
+        header.insertAdjacentElement("afterend", notice);
+      };
+
+      const replacePreview = () => {
+        if (!previewPanel) return;
+        previewPanel.outerHTML = `
+          <section class="panel">
+            <div class="empty-state">下载次数已用尽，当前分享不再提供预览。</div>
+          </section>
+        `;
+        button.textContent = "下载次数已用尽";
+        button.classList.remove("primary-btn");
+        button.classList.add("ghost-btn", "disabled-btn");
+        button.disabled = true;
+      };
+
+      const parseFilename = (disposition) => {
+        if (!disposition) return "{{.Item.Name}}";
+        const utf8 = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (utf8 && utf8[1]) {
+          try {
+            return decodeURIComponent(utf8[1]);
+          } catch (_) {}
+        }
+        const plain = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        if (plain && plain[1]) return plain[1];
+        return "{{.Item.Name}}";
+      };
+
+      button.addEventListener("click", async () => {
+        if (button.disabled) return;
+        button.disabled = true;
+
+        try {
+          const response = await fetch(button.dataset.downloadUrl, { credentials: "same-origin" });
+          if (!response.ok) {
+            if (response.status === 403) {
+              replacePreview();
+              setNotice("下载次数已用尽，当前分享不再提供预览。");
+              return;
+            }
+            const text = await response.text();
+            setNotice(text || "下载失败");
+            return;
+          }
+
+          const blob = await response.blob();
+          const objectURL = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = objectURL;
+          link.download = parseFilename(response.headers.get("Content-Disposition"));
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(objectURL);
+
+          const downloadsLeft = Number(button.dataset.downloadsLeft);
+          if (!Number.isNaN(downloadsLeft) && downloadsLeft > 0) {
+            const nextLeft = downloadsLeft - 1;
+            button.dataset.downloadsLeft = String(nextLeft);
+            if (nextLeft <= 0) {
+              replacePreview();
+              return;
+            }
+          }
+        } catch (_) {
+          setNotice("下载失败，请稍后重试。");
+        } finally {
+          if (!button.classList.contains("disabled-btn")) {
+            button.disabled = false;
+          }
         }
       });
     })();
