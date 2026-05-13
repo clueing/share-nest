@@ -7,8 +7,9 @@
   <title>{{.Item.Name}} | {{.SiteName}}</title>
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
 </head>
-<body class="share-page">
+<body class="share-page"{{if .Error}} data-page-notice="{{.Error}}" data-page-notice-type="error"{{end}}>
   <main class="share-shell">
     <header class="share-header">
       <div>
@@ -98,34 +99,14 @@
   </main>
 
   {{if .CanCopyText}}
-  <div class="copy-toast" id="copyToast" hidden>已复制到剪切板</div>
   <script>
     (() => {
       const button = document.getElementById("copyTextContentBtn");
       const source = document.getElementById("copyTextContentSource");
-      const toast = document.getElementById("copyToast");
-      if (!button || !source || !toast) return;
-
-      const showToast = (text) => {
-        toast.textContent = text;
-        toast.hidden = false;
-        clearTimeout(showToast.timer);
-        showToast.timer = setTimeout(() => {
-          toast.hidden = true;
-        }, 1800);
-      };
+      if (!button || !source) return;
 
       button.addEventListener("click", async () => {
-        try {
-          await navigator.clipboard.writeText(source.value);
-          showToast("文本内容已复制");
-        } catch (_) {
-          source.hidden = false;
-          source.select();
-          document.execCommand("copy");
-          source.hidden = true;
-          showToast("文本内容已复制");
-        }
+        window.AppUI.copyText(source.value, "文本内容已复制");
       });
     })();
   </script>
@@ -141,6 +122,7 @@
       const previewPanel = document.querySelector(".preview-panel");
       const errorNotice = document.querySelector(".notice-error");
       const setNotice = (text) => {
+        window.AppUI.notify({ message: text, type: "error" });
         if (errorNotice) {
           errorNotice.textContent = text;
           return;

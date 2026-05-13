@@ -751,6 +751,71 @@ tbody tr:hover {
   z-index: 20;
 }
 
+.toast-root {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: grid;
+  gap: 10px;
+  width: min(320px, calc(100vw - 32px));
+  z-index: 60;
+}
+
+.toast-item {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+  padding: 12px 14px;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+.toast-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast-title {
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--text-soft);
+}
+
+.toast-message {
+  margin-top: 5px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.toast-success {
+  border-color: #cce7d7;
+  background: rgba(248, 255, 250, 0.98);
+}
+
+.toast-success .toast-title {
+  color: var(--success-text);
+}
+
+.toast-error {
+  border-color: #fecdd3;
+  background: rgba(255, 247, 247, 0.98);
+}
+
+.toast-error .toast-title {
+  color: var(--danger);
+}
+
+.toast-info {
+  border-color: #dbe3f0;
+  background: rgba(251, 252, 254, 0.98);
+}
+
 .preview-toolbar {
   display: flex;
   justify-content: flex-end;
@@ -910,5 +975,11 @@ tbody tr:hover {
   .text-preview {
     min-height: 260px;
     padding: 16px;
+  }
+
+  .toast-root {
+    top: 14px;
+    right: 14px;
+    width: min(320px, calc(100vw - 28px));
   }
 }

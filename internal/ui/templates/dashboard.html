@@ -7,8 +7,9 @@
   <title>管理后台 | {{.SiteName}}</title>
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
 </head>
-<body>
+<body{{if .Message}} data-page-notice="{{.Message}}"{{end}}>
   <header class="topbar">
     <div>
       <p class="eyebrow">{{.SiteName}}</p>
@@ -108,9 +109,6 @@
           <h2>资源列表</h2>
           <p>已上传文件与文本分享统一管理，支持分页浏览。</p>
         </div>
-        {{if .Message}}
-        <div class="notice notice-success">{{.Message}}</div>
-        {{end}}
       </div>
 
       <div class="list-toolbar">
@@ -190,14 +188,14 @@
                     <span class="share-label">URL 携带密码链接</span>
                     <code>{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}</code>
                     <div class="button-row">
-                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}">复制带密码链接</button>
+                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}" data-copy-message="已复制带密码分享链接">复制带密码链接</button>
                     </div>
                   </div>
                   <div class="share-block">
                     <span class="share-label">分享密码</span>
                     <code>{{.SharePassword}}</code>
                     <div class="button-row">
-                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.SharePassword}}">复制密码</button>
+                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.SharePassword}}" data-copy-message="已复制分享密码">复制密码</button>
                     </div>
                   </div>
                   {{else}}
@@ -205,7 +203,7 @@
                     <span class="share-label">普通链接</span>
                     <code>{{$.BaseURL}}/s/{{.ShareCode}}</code>
                     <div class="button-row">
-                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{$.BaseURL}}/s/{{.ShareCode}}">复制普通链接</button>
+                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{$.BaseURL}}/s/{{.ShareCode}}" data-copy-message="已复制普通分享链接">复制普通链接</button>
                     </div>
                   </div>
                   {{end}}
@@ -306,14 +304,14 @@
         <div class="share-result-item">
           <span>普通分享链接</span>
           <code>{{.Flash.ShareURL}}</code>
-          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.ShareURL}}">复制普通链接</button>
+          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.ShareURL}}" data-copy-message="已复制普通分享链接">复制普通链接</button>
         </div>
 
         {{if .Flash.PasswordURL}}
         <div class="share-result-item">
           <span>URL 携带密码链接</span>
           <code>{{.Flash.PasswordURL}}</code>
-          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.PasswordURL}}">复制带密码链接</button>
+          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.PasswordURL}}" data-copy-message="已复制带密码分享链接">复制带密码链接</button>
         </div>
         {{end}}
 
@@ -321,7 +319,7 @@
         <div class="share-result-item">
           <span>快捷直达链接</span>
           <code>{{.Flash.DirectURL}}</code>
-          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.DirectURL}}">复制直达链接</button>
+          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.DirectURL}}" data-copy-message="已复制直达分享链接">复制直达链接</button>
         </div>
         {{end}}
 
@@ -329,7 +327,7 @@
         <div class="share-result-item">
           <span>分享密码</span>
           <code>{{.Flash.SharePassword}}</code>
-          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.SharePassword}}">复制密码</button>
+          <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.SharePassword}}" data-copy-message="已复制分享密码">复制密码</button>
         </div>
         {{end}}
       </div>
@@ -337,41 +335,8 @@
   </div>
   {{end}}
 
-  <div class="copy-toast" id="copyToast" hidden>已复制到剪切板</div>
-
   <script>
     (() => {
-      const toast = document.getElementById("copyToast");
-
-      const showToast = (text) => {
-        if (!toast) return;
-        toast.textContent = text;
-        toast.hidden = false;
-        clearTimeout(showToast.timer);
-        showToast.timer = setTimeout(() => {
-          toast.hidden = true;
-        }, 1800);
-      };
-
-      const copyText = async (value, successText) => {
-        if (!value) return;
-        try {
-          await navigator.clipboard.writeText(value);
-          showToast(successText || "已复制到剪切板");
-        } catch (_) {
-          const area = document.createElement("textarea");
-          area.value = value;
-          area.setAttribute("readonly", "");
-          area.style.position = "absolute";
-          area.style.left = "-9999px";
-          document.body.appendChild(area);
-          area.select();
-          document.execCommand("copy");
-          document.body.removeChild(area);
-          showToast(successText || "已复制到剪切板");
-        }
-      };
-
       document.querySelectorAll("[data-generate-password]").forEach((button) => {
         button.addEventListener("click", () => {
           const input = button.parentElement.querySelector("[data-password-input]");
@@ -381,13 +346,14 @@
           crypto.getRandomValues(array);
           input.value = Array.from(array, (n) => chars[n % chars.length]).join("");
           input.focus();
-          copyText(input.value, "随机密码已生成并复制");
+          window.AppUI.copyText(input.value, "随机密码已生成并复制");
         });
       });
 
       document.querySelectorAll(".js-copy").forEach((button) => {
         button.addEventListener("click", () => {
-          copyText(button.dataset.copyValue, "分享内容已复制");
+          const message = button.dataset.copyMessage || "复制成功";
+          window.AppUI.copyText(button.dataset.copyValue, message);
         });
       });
 
@@ -426,10 +392,10 @@
             .map((checkbox) => checkbox.dataset.copyValue)
             .filter(Boolean);
           if (values.length === 0) {
-            showToast("请先选择要复制的资源");
+            window.AppUI.notify({ message: "请先选择要复制的资源", type: "info" });
             return;
           }
-          copyText(values.join("\n"), "已复制选中分享链接");
+          window.AppUI.copyText(values.join("\n"), "已复制选中分享链接");
         });
       }
 
@@ -437,7 +403,7 @@
 
       const result = document.querySelector("[data-auto-copy]");
       if (result && result.dataset.autoCopy) {
-        copyText(result.dataset.autoCopy, "分享链接已自动复制");
+        window.AppUI.copyText(result.dataset.autoCopy, "分享链接已自动复制");
       }
 
       const modal = document.getElementById("shareModal");

@@ -7,8 +7,9 @@
   <title>登录 | {{.SiteName}}</title>
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
 </head>
-<body class="auth-page">
+<body class="auth-page"{{if .Error}} data-page-notice="{{.Error}}" data-page-notice-type="error"{{end}}>
   <main class="auth-card">
     <div class="brand">
       <span class="brand-mark">FS</span>
@@ -17,9 +18,6 @@
         <p>轻量、可预览、可分享</p>
       </div>
     </div>
-    {{if .Error}}
-    <div class="notice notice-error">{{.Error}}</div>
-    {{end}}
     <form method="post" action="/login" class="stack-form">
       <label>
         <span>用户名</span>
