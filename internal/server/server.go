@@ -30,6 +30,7 @@ import (
 	"file-service/internal/security"
 	"file-service/internal/storage"
 	"file-service/internal/ui"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 const adminCookieName = "fs_admin_session"
@@ -45,45 +46,46 @@ type Server struct {
 }
 
 type dashboardData struct {
-	SiteName   string
-	BaseURL    string
-	Items      []model.ItemSummary
-	AccessLogs []model.AccessLog
-	Message    string
-	Flash      flashData
-	EnvPath    string
-	EnvExample string
+	SiteName      string
+	BaseURL       string
+	Items         []model.ItemSummary
+	AccessLogs    []model.AccessLog
+	Message       string
+	Flash         flashData
+	EnvPath       string
+	EnvExample    string
 	MaxUploadSize int64
-	CurrentPage int
-	TotalPages  int
-	TotalCount  int
-	PageSize    int
-	PrevPage    int
-	NextPage    int
-	PageNumbers []int
+	CurrentPage   int
+	TotalPages    int
+	TotalCount    int
+	PageSize      int
+	PrevPage      int
+	NextPage      int
+	PageNumbers   []int
 }
 
 type sharePageData struct {
-	SiteName       string
-	Item           model.SharedItem
-	Locked         bool
-	Error          string
-	Expired        bool
-	NoDownloads    bool
-	CanCopyText    bool
-	CopyTextSource string
-	DownloadsLeft  int
-	PreviewMode    preview.Mode
-	TextHTML       template.HTML
-	MarkdownHTML   template.HTML
-	CodeThemeCSS   template.CSS
-	ArchivePreview *preview.ArchiveSummary
-	IsMarkdown     bool
+	SiteName          string
+	Item              model.SharedItem
+	ShareURL          string
+	Locked            bool
+	Error             string
+	Expired           bool
+	NoDownloads       bool
+	CanCopyText       bool
+	CopyTextSource    string
+	DownloadsLeft     int
+	PreviewMode       preview.Mode
+	TextHTML          template.HTML
+	MarkdownHTML      template.HTML
+	CodeThemeCSS      template.CSS
+	ArchivePreview    *preview.ArchiveSummary
+	IsMarkdown        bool
 	CodeLanguageLabel string
-	Truncated      bool
-	PreviewLimit   int64
-	RawURL         string
-	DownloadURL    string
+	Truncated         bool
+	PreviewLimit      int64
+	RawURL            string
+	DownloadURL       string
 }
 
 type flashData struct {
@@ -154,6 +156,7 @@ func (s *Server) Handler() http.Handler {
 func (s *Server) routes(staticFS http.FileSystem) {
 	s.mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(staticFS)))
 	s.mux.Handle("GET /favicon.ico", http.FileServer(staticFS))
+	s.mux.HandleFunc("GET /qr.png", s.handleQRCodeImage)
 
 	s.mux.HandleFunc("GET /", s.handleRoot)
 	s.mux.HandleFunc("GET /login", s.handleLoginPage)
@@ -258,22 +261,22 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := dashboardData{
-		SiteName:    s.cfg.SiteName,
-		BaseURL:     s.baseURL(r),
-		Items:       items,
-		AccessLogs:  logs,
-		Message:     flash.Message,
-		Flash:       flash,
-		EnvPath:     ".env",
-		EnvExample:  s.envExample(),
+		SiteName:      s.cfg.SiteName,
+		BaseURL:       s.baseURL(r),
+		Items:         items,
+		AccessLogs:    logs,
+		Message:       flash.Message,
+		Flash:         flash,
+		EnvPath:       ".env",
+		EnvExample:    s.envExample(),
 		MaxUploadSize: s.cfg.MaxUploadSize,
-		CurrentPage: currentPage,
-		TotalPages:  totalPages,
-		TotalCount:  totalCount,
-		PageSize:    pageSize,
-		PrevPage:    maxInt(1, currentPage-1),
-		NextPage:    minInt(totalPages, currentPage+1),
-		PageNumbers: visiblePages(currentPage, totalPages, 5),
+		CurrentPage:   currentPage,
+		TotalPages:    totalPages,
+		TotalCount:    totalCount,
+		PageSize:      pageSize,
+		PrevPage:      maxInt(1, currentPage-1),
+		NextPage:      minInt(totalPages, currentPage+1),
+		PageNumbers:   visiblePages(currentPage, totalPages, 5),
 	}
 	s.render(w, "dashboard", data, http.StatusOK)
 }
@@ -669,6 +672,30 @@ func (s *Server) handleShareDownload(w http.ResponseWriter, r *http.Request) {
 	s.serveItemContentPrepared(w, r, share, true, prepared)
 }
 
+func (s *Server) handleQRCodeImage(w http.ResponseWriter, r *http.Request) {
+	value := strings.TrimSpace(r.URL.Query().Get("data"))
+	if value == "" {
+		http.Error(w, "二维码内容不能为空", http.StatusBadRequest)
+		return
+	}
+	if len(value) > 4096 {
+		http.Error(w, "二维码内容过长", http.StatusBadRequest)
+		return
+	}
+
+	size := parseBoundedInt(r.URL.Query().Get("size"), 320, 96, 1024)
+	png, err := qrcode.Encode(value, qrcode.Medium, size)
+	if err != nil {
+		http.Error(w, "生成二维码失败", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(png)
+}
+
 func (s *Server) serveItemContent(w http.ResponseWriter, r *http.Request, item model.SharedItem, download bool) {
 	prepared, err := s.prepareContent(item)
 	if err != nil {
@@ -754,55 +781,56 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 	}
 
 	data := sharePageData{
-		SiteName:       s.cfg.SiteName,
-		Item:           item,
-		Locked:         false,
-		Error:          errText,
-		Expired:        false,
-		NoDownloads:    s.downloadLimitReached(item),
-		CanCopyText:    mode == preview.ModeText,
-		CopyTextSource: copyTextSource,
-		DownloadsLeft:  s.downloadsLeft(item),
-		PreviewMode:    mode,
-		TextHTML:       textHTML,
-		MarkdownHTML:   markdownHTML,
-		CodeThemeCSS:   preview.ThemeCSS(),
-		ArchivePreview: archivePreview,
-		IsMarkdown:     isMarkdown,
+		SiteName:          s.cfg.SiteName,
+		Item:              item,
+		ShareURL:          s.baseURL(r) + "/s/" + item.ShareCode,
+		Locked:            false,
+		Error:             errText,
+		Expired:           false,
+		NoDownloads:       s.downloadLimitReached(item),
+		CanCopyText:       mode == preview.ModeText,
+		CopyTextSource:    copyTextSource,
+		DownloadsLeft:     s.downloadsLeft(item),
+		PreviewMode:       mode,
+		TextHTML:          textHTML,
+		MarkdownHTML:      markdownHTML,
+		CodeThemeCSS:      preview.ThemeCSS(),
+		ArchivePreview:    archivePreview,
+		IsMarkdown:        isMarkdown,
 		CodeLanguageLabel: preview.LanguageLabel(codeLanguage),
-		Truncated:      truncated,
-		PreviewLimit:   s.cfg.PreviewLimit,
-		RawURL:         "/s/" + item.ShareCode + "/raw",
-		DownloadURL:    "/s/" + item.ShareCode + "/download",
+		Truncated:         truncated,
+		PreviewLimit:      s.cfg.PreviewLimit,
+		RawURL:            "/s/" + item.ShareCode + "/raw",
+		DownloadURL:       "/s/" + item.ShareCode + "/download",
 	}
 	s.render(w, "share", data, http.StatusOK)
 }
 
 func (s *Server) renderShareLocked(w http.ResponseWriter, item model.SharedItem, errText string) {
 	data := sharePageData{
-		SiteName:     s.cfg.SiteName,
-		Item:         item,
-		Locked:       true,
-		Error:        errText,
-		Expired:      false,
-		NoDownloads:  false,
-		CanCopyText:  false,
+		SiteName:      s.cfg.SiteName,
+		Item:          item,
+		Locked:        true,
+		Error:         errText,
+		Expired:       false,
+		NoDownloads:   false,
+		CanCopyText:   false,
 		DownloadsLeft: s.downloadsLeft(item),
-		PreviewLimit: s.cfg.PreviewLimit,
+		PreviewLimit:  s.cfg.PreviewLimit,
 	}
 	s.render(w, "share", data, http.StatusOK)
 }
 
 func (s *Server) renderShareBlocked(w http.ResponseWriter, item model.SharedItem, errText string, expired, noDownloads bool) {
 	data := sharePageData{
-		SiteName:     s.cfg.SiteName,
-		Item:         item,
-		Error:        errText,
-		Expired:      expired,
-		NoDownloads:  noDownloads,
-		CanCopyText:  false,
+		SiteName:      s.cfg.SiteName,
+		Item:          item,
+		Error:         errText,
+		Expired:       expired,
+		NoDownloads:   noDownloads,
+		CanCopyText:   false,
 		DownloadsLeft: s.downloadsLeft(item),
-		PreviewLimit: s.cfg.PreviewLimit,
+		PreviewLimit:  s.cfg.PreviewLimit,
 	}
 	s.render(w, "share", data, http.StatusOK)
 }
@@ -1265,6 +1293,20 @@ func parsePositiveInt(value string, fallback int) int {
 	parsed, err := strconv.Atoi(strings.TrimSpace(value))
 	if err != nil || parsed <= 0 {
 		return fallback
+	}
+	return parsed
+}
+
+func parseBoundedInt(value string, fallback, minValue, maxValue int) int {
+	parsed, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return fallback
+	}
+	if parsed < minValue {
+		return minValue
+	}
+	if parsed > maxValue {
+		return maxValue
 	}
 	return parsed
 }
