@@ -40,7 +40,7 @@ func Load() (Config, error) {
 		DataDir:       dataDir,
 		DBPath:        dbPath,
 		BaseURL:       strings.TrimRight(getEnv("FILESERVICE_BASE_URL", ""), "/"),
-		SiteName:      getEnv("FILESERVICE_SITE_NAME", "File Service"),
+		SiteName:      getEnv("FILESERVICE_SITE_NAME", "ShareNest"),
 		AdminUser:     getEnv("FILESERVICE_ADMIN_USER", "admin"),
 		AdminPass:     getEnv("FILESERVICE_ADMIN_PASS", "admin123"),
 		SessionSecret: sessionSecret,
