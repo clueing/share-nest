@@ -336,7 +336,7 @@
   {{end}}
 
   <script>
-    (() => {
+    document.addEventListener("DOMContentLoaded", () => {
       document.querySelectorAll("[data-generate-password]").forEach((button) => {
         button.addEventListener("click", () => {
           const input = button.parentElement.querySelector("[data-password-input]");
@@ -401,11 +401,6 @@
 
       updateSelection();
 
-      const result = document.querySelector("[data-auto-copy]");
-      if (result && result.dataset.autoCopy) {
-        window.AppUI.copyText(result.dataset.autoCopy, "分享链接已自动复制");
-      }
-
       const modal = document.getElementById("shareModal");
       if (modal) {
         modal.addEventListener("click", (event) => {
@@ -416,6 +411,11 @@
         modal.querySelectorAll("[data-close-modal]").forEach((button) => {
           button.addEventListener("click", () => modal.remove());
         });
+      }
+
+      const result = document.querySelector("[data-auto-copy]");
+      if (result && result.dataset.autoCopy && window.AppUI) {
+        window.AppUI.copyText(result.dataset.autoCopy, "分享链接已自动复制");
       }
 
       document.querySelectorAll("[data-dropzone]").forEach((dropzone) => {
@@ -458,7 +458,7 @@
           event.stopPropagation();
         });
       });
-    })();
+    });
   </script>
 </body>
 </html>
