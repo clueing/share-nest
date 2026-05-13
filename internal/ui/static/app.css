@@ -844,6 +844,7 @@ tbody tr:hover {
   display: grid;
   place-items: center;
   padding: var(--space-5);
+  overflow-y: auto;
   background: rgba(15, 23, 42, 0.44);
   backdrop-filter: blur(6px);
   z-index: 30;
@@ -851,6 +852,8 @@ tbody tr:hover {
 
 .modal-card {
   width: min(920px, 100%);
+  max-height: min(calc(100vh - 40px), 920px);
+  overflow-y: auto;
   box-shadow: 0 24px 64px rgba(15, 23, 42, 0.18);
 }
 
@@ -1617,6 +1620,16 @@ tbody tr:hover {
     top: 14px;
     right: 14px;
     width: min(320px, calc(100vw - 28px));
+  }
+
+  .modal-backdrop {
+    place-items: start center;
+    padding: 14px;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100vh - 28px);
   }
 
   .qr-dialog {
