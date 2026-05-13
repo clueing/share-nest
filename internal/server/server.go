@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"file-service/internal/config"
 	"file-service/internal/model"
@@ -695,7 +696,7 @@ func (s *Server) serveItemContentPrepared(w http.ResponseWriter, r *http.Request
 	if download && item.Kind == "text" {
 		filename = ensureTextDownloadName(item)
 	}
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, filename))
+	w.Header().Set("Content-Disposition", buildContentDisposition(disposition, filename))
 
 	if item.Kind == "text" {
 		if download && item.MIMEType != "" {
@@ -1071,6 +1072,62 @@ func ensureTextDownloadName(item model.SharedItem) string {
 		return name + ".md"
 	}
 	return name + ".txt"
+}
+
+func buildContentDisposition(disposition, filename string) string {
+	fallback := asciiFilenameFallback(filename)
+	if fallback == "" {
+		fallback = "download"
+	}
+
+	if !utf8.ValidString(filename) {
+		filename = fallback
+	}
+
+	return fmt.Sprintf(`%s; filename="%s"; filename*=UTF-8''%s`,
+		disposition,
+		escapeContentDispositionValue(fallback),
+		url.PathEscape(filename),
+	)
+}
+
+func asciiFilenameFallback(name string) string {
+	var builder strings.Builder
+	for _, r := range name {
+		switch {
+		case r == '"' || r == '\\' || r == '\r' || r == '\n':
+			builder.WriteByte('_')
+		case r >= 0x20 && r <= 0x7e:
+			builder.WriteRune(r)
+		default:
+			builder.WriteByte('_')
+		}
+	}
+
+	fallback := strings.TrimSpace(builder.String())
+	fallback = strings.Trim(fallback, ".")
+	if fallback == "" {
+		ext := filepath.Ext(name)
+		if ext != "" && isASCII(ext) {
+			return "download" + ext
+		}
+		return "download"
+	}
+	return fallback
+}
+
+func escapeContentDispositionValue(value string) string {
+	replacer := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return replacer.Replace(value)
+}
+
+func isASCII(value string) bool {
+	for _, r := range value {
+		if r > 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) buildSuccessFlash(r *http.Request, summary model.ItemSummary, sharePassword, message string) flashData {
