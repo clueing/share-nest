@@ -1430,6 +1430,11 @@ tbody tr:hover {
   .auth-card,
   .modal-card {
     border-radius: 18px;
+  }
+
+  .share-header,
+  .auth-card,
+  .modal-card {
     padding: 18px;
   }
 
