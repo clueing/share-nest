@@ -85,9 +85,18 @@ textarea {
   padding: var(--space-6);
 }
 
+.share-page {
+  place-items: start center;
+}
+
 .auth-card,
 .share-shell {
   width: min(980px, 100%);
+}
+
+.share-shell {
+  display: grid;
+  gap: var(--space-4);
 }
 
 .auth-card {
@@ -880,6 +889,7 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-3);
   padding: 14px 16px;
   background: #0b1120;
@@ -987,16 +997,20 @@ tbody tr:hover {
 .code-render-shell,
 .markdown-code-shell {
   background: #0f172a;
+  min-width: 0;
 }
 
 .code-render-shell .chroma,
 .markdown-code-shell .chroma {
   margin: 0;
   padding: 18px 20px 20px;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
   background: transparent !important;
   font-size: 13px;
   line-height: 1.7;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 .code-render-shell .chroma code,
@@ -1058,6 +1072,32 @@ tbody tr:hover {
   .share-result-grid {
     grid-template-columns: 1fr;
   }
+
+  .share-page {
+    padding: var(--space-5);
+  }
+
+  .share-shell {
+    gap: var(--space-3);
+  }
+
+  .share-header {
+    margin-bottom: 0;
+  }
+
+  .share-summary {
+    gap: 10px;
+  }
+
+  .markdown-shell {
+    padding: 20px 18px 8px;
+  }
+
+  .media-preview,
+  .pdf-preview,
+  .video-preview {
+    min-height: 420px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1065,6 +1105,10 @@ tbody tr:hover {
   .auth-page,
   .share-page {
     padding: var(--space-4);
+  }
+
+  .share-page {
+    display: block;
   }
 
   .topbar {
@@ -1086,6 +1130,31 @@ tbody tr:hover {
 
   .auth-card {
     padding: 24px;
+  }
+
+  .share-shell {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .share-header {
+    padding: 16px;
+  }
+
+  .share-header h1 {
+    font-size: 20px;
+    line-height: 1.25;
+  }
+
+  .share-summary {
+    margin-top: 10px;
+    gap: 8px;
+    font-size: 12px;
+  }
+
+  .share-summary span {
+    min-height: 28px;
+    padding: 0 9px;
   }
 
   .input-action,
@@ -1145,6 +1214,53 @@ tbody tr:hover {
   .pdf-preview,
   .video-preview {
     min-height: 320px;
+  }
+
+  .preview-toolbar {
+    padding-top: 0;
+  }
+
+  .code-preview-head,
+  .code-block-head {
+    align-items: flex-start;
+    padding: 12px 14px;
+  }
+
+  .code-language-chip {
+    min-height: 24px;
+    font-size: 10px;
+  }
+
+  .code-render-shell .chroma,
+  .markdown-code-shell .chroma {
+    padding: 14px;
+    font-size: 12px;
+    line-height: 1.65;
+  }
+
+  .markdown-shell {
+    padding: 16px 14px 6px;
+  }
+
+  .markdown-preview {
+    font-size: 13px;
+    line-height: 1.68;
+  }
+
+  .markdown-preview h1 {
+    font-size: 24px;
+  }
+
+  .markdown-preview h2 {
+    font-size: 21px;
+  }
+
+  .markdown-preview h3 {
+    font-size: 18px;
+  }
+
+  .player-preview {
+    padding: 18px 14px;
   }
 
   .toast-root {
