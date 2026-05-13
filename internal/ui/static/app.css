@@ -186,6 +186,10 @@ textarea {
   gap: var(--space-5);
 }
 
+.dashboard-grid > * {
+  min-width: 0;
+}
+
 .panel,
 .share-header {
   background: var(--panel);
@@ -197,6 +201,7 @@ textarea {
 
 .panel {
   padding: var(--space-6);
+  min-width: 0;
 }
 
 .panel-wide {
@@ -505,6 +510,7 @@ button,
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .stat-pill {
@@ -526,11 +532,13 @@ button,
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-2);
+  min-width: 0;
 }
 
 .share-stack,
 .share-block {
   display: grid;
+  min-width: 0;
 }
 
 .share-stack {
@@ -555,6 +563,7 @@ button,
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+  min-width: 0;
 }
 
 .status-chip {
@@ -605,6 +614,7 @@ tbody tr:hover {
   flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-2);
+  min-width: 0;
 }
 
 .meta-strong,
@@ -636,7 +646,9 @@ tbody tr:hover {
 .share-result-item code {
   display: inline-block;
   width: 100%;
+  max-width: 100%;
   overflow-wrap: anywhere;
+  word-break: break-word;
   padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
@@ -1271,6 +1283,22 @@ tbody tr:hover {
     padding: 18px;
   }
 
+  .panel,
+  .panel-wide,
+  .batch-toolbar,
+  .list-toolbar,
+  .list-stats,
+  .button-row,
+  .share-stack,
+  .share-block,
+  .status-list,
+  .item-meta,
+  .share-link-cell,
+  .table-wrap {
+    min-width: 0;
+    max-width: 100%;
+  }
+
   .auth-card {
     padding: 24px;
   }
@@ -1335,11 +1363,13 @@ tbody tr:hover {
     border-radius: var(--radius-lg);
     background: #fff;
     box-shadow: var(--shadow-sm);
+    overflow: hidden;
   }
 
   td {
     border-bottom: 0;
     padding: 8px 0;
+    overflow: hidden;
   }
 
   td::before {
@@ -1367,6 +1397,11 @@ tbody tr:hover {
   .binary-meta-preview {
     padding: 16px;
     gap: 12px;
+  }
+
+  .share-link-cell code,
+  .share-result-item code {
+    white-space: normal;
   }
 
   .archive-overview {
