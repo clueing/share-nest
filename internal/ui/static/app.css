@@ -943,11 +943,23 @@ tbody tr:hover {
 
 .share-result-item {
   display: grid;
+  align-content: start;
   gap: var(--space-2);
   padding: 14px;
   background: rgba(255, 255, 255, 0.86);
   border: 1px solid rgba(199, 215, 255, 0.9);
   border-radius: var(--radius-lg);
+}
+
+.share-result-item .button-row,
+.qr-meta-card .button-row {
+  margin-top: 0;
+  align-items: center;
+}
+
+.share-result-item .button-row > *,
+.qr-meta-card .button-row > * {
+  align-self: flex-start;
 }
 
 .share-result-qr-card {
@@ -1037,6 +1049,11 @@ tbody tr:hover {
 .qr-meta-label {
   color: var(--text-faint);
   font-size: 12px;
+}
+
+.qr-meta-group {
+  display: grid;
+  gap: var(--space-2);
 }
 
 .qr-meta-card code {

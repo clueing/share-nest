@@ -198,7 +198,7 @@
                     <code>{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}</code>
                     <div class="button-row">
                       <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}" data-copy-message="已复制带密码分享链接">复制带密码链接</button>
-                      <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}" data-qr-title="扫码打开分享" data-qr-description="手机扫码后可直接打开带密码的分享链接。" data-qr-label="带密码分享链接">二维码</button>
+                      <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{$.BaseURL}}/s/{{.ShareCode}}?p={{.SharePassword}}" data-qr-password="{{.SharePassword}}" data-qr-title="扫码打开分享" data-qr-description="手机扫码后可直接打开带密码的分享链接。" data-qr-label="带密码分享链接">二维码</button>
                     </div>
                   </div>
                   <div class="share-block">
@@ -306,7 +306,7 @@
       <div class="share-result-head">
         <div>
           <h3>分享已创建</h3>
-          <p>已自动复制最适合直接转发的链接到剪切板。</p>
+          <p>已为你准备好最适合直接转发的链接，可复制或扫码分享。</p>
         </div>
         <button type="button" class="ghost-btn compact-btn" data-close-modal>关闭</button>
       </div>
@@ -320,7 +320,7 @@
           </div>
           <p class="share-note">默认展示最适合直接转发的链接二维码。</p>
           <div class="button-row">
-            <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{.Flash.AutoCopy}}" data-qr-title="扫码分享" data-qr-description="使用手机扫码打开这个分享链接。" data-qr-label="分享链接">放大查看</button>
+            <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{.Flash.AutoCopy}}" {{if .Flash.SharePassword}}data-qr-password="{{.Flash.SharePassword}}"{{end}} data-qr-title="扫码分享" data-qr-description="使用手机扫码打开这个分享链接。" data-qr-label="分享链接">放大查看</button>
           </div>
         </div>
         {{end}}
@@ -330,7 +330,7 @@
           <code>{{.Flash.ShareURL}}</code>
           <div class="button-row">
             <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.ShareURL}}" data-copy-message="已复制普通分享链接">复制普通链接</button>
-            <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{.Flash.ShareURL}}" data-qr-title="扫码打开分享" data-qr-description="使用手机扫码即可打开当前分享链接。" data-qr-label="普通分享链接">二维码</button>
+            <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{.Flash.ShareURL}}" {{if .Flash.SharePassword}}data-qr-password="{{.Flash.SharePassword}}"{{end}} data-qr-title="扫码打开分享" data-qr-description="使用手机扫码即可打开当前分享链接。" data-qr-label="普通分享链接">二维码</button>
           </div>
         </div>
 
@@ -340,7 +340,7 @@
           <code>{{.Flash.PasswordURL}}</code>
           <div class="button-row">
             <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.Flash.PasswordURL}}" data-copy-message="已复制带密码分享链接">复制带密码链接</button>
-            <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{.Flash.PasswordURL}}" data-qr-title="扫码打开分享" data-qr-description="手机扫码后可直接打开带密码的分享链接。" data-qr-label="带密码分享链接">二维码</button>
+            <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{.Flash.PasswordURL}}" data-qr-password="{{.Flash.SharePassword}}" data-qr-title="扫码打开分享" data-qr-description="手机扫码后可直接打开带密码的分享链接。" data-qr-label="带密码分享链接">二维码</button>
           </div>
         </div>
         {{end}}
@@ -398,7 +398,7 @@
         window.AppUI.hydrateQRCodeImages(modal);
       };
 
-      const createShareQRCodeItem = (value) => {
+      const createShareQRCodeItem = (value, password = "") => {
         const item = document.createElement("div");
         item.className = "share-result-item share-result-qr-card";
 
@@ -432,6 +432,9 @@
         button.dataset.qrTitle = "扫码分享";
         button.dataset.qrDescription = "使用手机扫码打开这个分享链接。";
         button.dataset.qrLabel = "分享链接";
+        if (password) {
+          button.dataset.qrPassword = password;
+        }
         button.textContent = "放大查看";
         actions.appendChild(button);
         item.appendChild(actions);
@@ -439,7 +442,7 @@
         return item;
       };
 
-      const createShareResultItem = (label, value, buttonText, copyMessage, qrDescription) => {
+      const createShareResultItem = (label, value, buttonText, copyMessage, qrDescription, qrPassword = "") => {
         const item = document.createElement("div");
         item.className = "share-result-item";
 
@@ -471,6 +474,9 @@
           qrButton.dataset.qrTitle = "扫码打开分享";
           qrButton.dataset.qrDescription = qrDescription;
           qrButton.dataset.qrLabel = label;
+          if (qrPassword) {
+            qrButton.dataset.qrPassword = qrPassword;
+          }
           qrButton.textContent = "二维码";
           actions.appendChild(qrButton);
         }
@@ -498,7 +504,7 @@
         const title = document.createElement("h3");
         title.textContent = "分享已创建";
         const desc = document.createElement("p");
-        desc.textContent = "已自动复制最适合直接转发的链接到剪切板。";
+        desc.textContent = "已为你准备好最适合直接转发的链接，可复制或扫码分享。";
         headCopy.append(title, desc);
         const closeButton = document.createElement("button");
         closeButton.type = "button";
@@ -510,12 +516,12 @@
         const grid = document.createElement("div");
         grid.className = "share-result-grid";
         if (flash.auto_copy) {
-          grid.appendChild(createShareQRCodeItem(flash.auto_copy));
+          grid.appendChild(createShareQRCodeItem(flash.auto_copy, flash.share_password || ""));
         }
-        grid.appendChild(createShareResultItem("普通分享链接", flash.share_url, "复制普通链接", "已复制普通分享链接", "使用手机扫码即可打开当前分享链接。"));
+        grid.appendChild(createShareResultItem("普通分享链接", flash.share_url, "复制普通链接", "已复制普通分享链接", "使用手机扫码即可打开当前分享链接。", flash.share_password || ""));
 
         if (flash.password_url) {
-          grid.appendChild(createShareResultItem("URL 携带密码链接", flash.password_url, "复制带密码链接", "已复制带密码分享链接", "手机扫码后可直接打开带密码的分享链接。"));
+          grid.appendChild(createShareResultItem("URL 携带密码链接", flash.password_url, "复制带密码链接", "已复制带密码分享链接", "手机扫码后可直接打开带密码的分享链接。", flash.share_password || ""));
         }
         if (flash.direct_url) {
           grid.appendChild(createShareResultItem("快捷直达链接", flash.direct_url, "复制直达链接", "已复制直达分享链接", "手机扫码后可直接打开免密直达链接。"));
@@ -533,7 +539,10 @@
           window.AppUI.notify({ message: flash.message, type: "success" });
         }
         if (autoCopy && flash.auto_copy) {
-          window.AppUI.copyText(flash.auto_copy, "分享链接已自动复制");
+          window.AppUI.copyText(flash.auto_copy, "分享链接已自动复制", {
+            requireUserGesture: true,
+            failureMessage: "浏览器阻止了自动复制，请点击下方复制按钮。",
+          });
         }
       };
 
@@ -609,7 +618,10 @@
         bindShareModal(modal);
         const result = modal.querySelector("[data-auto-copy]");
         if (result && result.dataset.autoCopy && window.AppUI) {
-          window.AppUI.copyText(result.dataset.autoCopy, "分享链接已自动复制");
+          window.AppUI.copyText(result.dataset.autoCopy, "分享链接已自动复制", {
+            requireUserGesture: true,
+            failureMessage: "浏览器阻止了自动复制，请点击下方复制按钮。",
+          });
         }
       }
 

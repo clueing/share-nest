@@ -27,7 +27,7 @@
       {{if not .Locked}}
       <div class="share-header-actions">
         {{if and .ShareURL (not .NoDownloads)}}
-        <button type="button" class="ghost-btn" data-open-qr data-qr-value="{{.ShareURL}}" data-qr-title="扫码打开分享" data-qr-description="使用手机扫码即可打开当前分享页。" data-qr-label="分享页链接">二维码分享</button>
+        <button type="button" class="ghost-btn" data-open-qr data-qr-value="{{.ShareURL}}" {{if .Item.SharePassword}}data-qr-password="{{.Item.SharePassword}}"{{end}} data-qr-title="扫码打开分享" data-qr-description="使用手机扫码即可打开当前分享页。" data-qr-label="分享页链接">二维码分享</button>
         {{end}}
         {{if .NoDownloads}}
         <span class="ghost-btn disabled-btn">下载次数已用尽</span>

@@ -36,6 +36,7 @@
     description = "使用手机扫码打开这个分享链接。",
     label = "分享链接",
     value,
+    password = "",
   } = {}) => {
     if (!value) return;
 
@@ -93,6 +94,35 @@
     note.className = "qr-meta-note";
     note.textContent = "支持手机扫码打开，也可以复制后直接转发。";
 
+    const metaContent = document.createElement("div");
+    metaContent.className = "qr-meta-group";
+    metaContent.append(metaLabel, code);
+
+    const passwordContent = document.createElement("div");
+    passwordContent.className = "qr-meta-group";
+    if (password) {
+      const passwordLabel = document.createElement("span");
+      passwordLabel.className = "qr-meta-label";
+      passwordLabel.textContent = "访问密码";
+
+      const passwordCode = document.createElement("code");
+      passwordCode.textContent = password;
+
+      const passwordActions = document.createElement("div");
+      passwordActions.className = "button-row";
+
+      const copyPasswordButton = document.createElement("button");
+      copyPasswordButton.type = "button";
+      copyPasswordButton.className = "ghost-btn compact-btn";
+      copyPasswordButton.textContent = "复制密码";
+      copyPasswordButton.addEventListener("click", () => {
+        window.AppUI.copyText(password, "已复制访问密码");
+      });
+
+      passwordActions.appendChild(copyPasswordButton);
+      passwordContent.append(passwordLabel, passwordCode, passwordActions);
+    }
+
     const actions = document.createElement("div");
     actions.className = "button-row";
 
@@ -112,7 +142,11 @@
     openLink.textContent = "打开链接";
 
     actions.append(copyButton, openLink);
-    meta.append(metaLabel, code, note, actions);
+    meta.append(metaContent);
+    if (password) {
+      meta.append(passwordContent);
+    }
+    meta.append(note, actions);
     body.append(preview, meta);
     card.append(head, body);
     modal.appendChild(card);
@@ -177,31 +211,85 @@
     item.addEventListener("click", remove, { once: true });
   };
 
-  const copyText = async (value, successMessage = "复制成功") => {
+  const legacyCopyText = (value) => {
+    const selection = document.getSelection();
+    const savedRanges = [];
+    if (selection) {
+      for (let index = 0; index < selection.rangeCount; index += 1) {
+        savedRanges.push(selection.getRangeAt(index).cloneRange());
+      }
+    }
+
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const area = document.createElement("textarea");
+    area.value = value;
+    area.setAttribute("aria-hidden", "true");
+    area.style.position = "fixed";
+    area.style.top = "0";
+    area.style.left = "-9999px";
+    area.style.opacity = "0";
+    area.style.pointerEvents = "none";
+
+    document.body.appendChild(area);
+    area.focus({ preventScroll: true });
+    area.select();
+    area.setSelectionRange(0, area.value.length);
+
+    let copied = false;
+    try {
+      copied = document.execCommand("copy");
+    } finally {
+      document.body.removeChild(area);
+
+      if (selection) {
+        selection.removeAllRanges();
+        savedRanges.forEach((range) => selection.addRange(range));
+      }
+
+      if (activeElement) {
+        activeElement.focus({ preventScroll: true });
+      }
+    }
+
+    return copied;
+  };
+
+  const copyText = async (value, successMessage = "复制成功", options = {}) => {
     if (!value) return false;
+    const {
+      silentFailure = false,
+      silentSuccess = false,
+      requireUserGesture = false,
+      failureMessage = "复制失败，请手动复制。",
+    } = options;
+
+    if (requireUserGesture && !(navigator.userActivation && navigator.userActivation.isActive)) {
+      if (!silentFailure) {
+        notify({ message: failureMessage, type: "error" });
+      }
+      return false;
+    }
 
     try {
       await navigator.clipboard.writeText(value);
-      notify({ message: successMessage, type: "success" });
+      if (!silentSuccess) {
+        notify({ message: successMessage, type: "success" });
+      }
       return true;
     } catch (_) {
       try {
-        const area = document.createElement("textarea");
-        area.value = value;
-        area.setAttribute("readonly", "");
-        area.style.position = "absolute";
-        area.style.left = "-9999px";
-        document.body.appendChild(area);
-        area.select();
-        const copied = document.execCommand("copy");
-        document.body.removeChild(area);
+        const copied = legacyCopyText(value);
         if (!copied) {
           throw new Error("copy failed");
         }
-        notify({ message: successMessage, type: "success" });
+        if (!silentSuccess) {
+          notify({ message: successMessage, type: "success" });
+        }
         return true;
       } catch (_) {
-        notify({ message: "复制失败，请手动复制。", type: "error" });
+        if (!silentFailure) {
+          notify({ message: failureMessage, type: "error" });
+        }
         return false;
       }
     }
@@ -241,6 +329,7 @@
         description: trigger.dataset.qrDescription || "使用手机扫码打开这个分享链接。",
         label: trigger.dataset.qrLabel || "分享链接",
         value: trigger.dataset.qrValue || "",
+        password: trigger.dataset.qrPassword || "",
       });
     });
   });
