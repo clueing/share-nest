@@ -70,9 +70,14 @@ type sharePageData struct {
 	Expired      bool
 	NoDownloads  bool
 	CanCopyText  bool
+	CopyTextSource string
 	DownloadsLeft int
 	PreviewMode  preview.Mode
 	TextPreview  string
+	MarkdownHTML template.HTML
+	IsMarkdown   bool
+	CodeLanguage string
+	CodeLanguageLabel string
 	Truncated    bool
 	PreviewLimit int64
 	RawURL       string
@@ -681,6 +686,9 @@ func (s *Server) serveItemContentPrepared(w http.ResponseWriter, r *http.Request
 	if !download && mode == preview.ModeNone {
 		disposition = "attachment"
 	}
+	if !download && strings.EqualFold(item.Ext, "svg") {
+		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none'; style-src 'unsafe-inline'; img-src data: blob: 'self'")
+	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	filename := sanitizeFilename(item.Name)
 	if download && item.Kind == "text" {
@@ -713,13 +721,23 @@ func (s *Server) serveItemContentPrepared(w http.ResponseWriter, r *http.Request
 func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item model.SharedItem, errText string) {
 	mode := preview.Detect(item.Kind, item.MIMEType, item.Name)
 	textPreview := ""
+	markdownHTML := template.HTML("")
 	truncated := false
+	isMarkdown := preview.IsMarkdown(item.Name, item.MIMEType)
+	codeLanguage := preview.CodeLanguage(item.Name, item.MIMEType)
+	copyTextSource := ""
 
 	if mode == preview.ModeText {
 		var err error
 		textPreview, truncated, err = s.loadTextPreview(item)
 		if err != nil {
 			errText = "加载预览内容失败"
+		} else if isMarkdown {
+			markdownHTML = preview.RenderMarkdown(textPreview)
+		}
+		copyTextSource = textPreview
+		if item.Kind == "text" && item.ContentText != "" {
+			copyTextSource = item.ContentText
 		}
 	}
 
@@ -730,10 +748,15 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 		Error:        errText,
 		Expired:      false,
 		NoDownloads:  s.downloadLimitReached(item),
-		CanCopyText:  item.Kind == "text",
+		CanCopyText:  mode == preview.ModeText,
+		CopyTextSource: copyTextSource,
 		DownloadsLeft: s.downloadsLeft(item),
 		PreviewMode:  mode,
 		TextPreview:  textPreview,
+		MarkdownHTML: markdownHTML,
+		IsMarkdown:   isMarkdown,
+		CodeLanguage: codeLanguage,
+		CodeLanguageLabel: preview.LanguageLabel(codeLanguage),
 		Truncated:    truncated,
 		PreviewLimit: s.cfg.PreviewLimit,
 		RawURL:       "/s/" + item.ShareCode + "/raw",

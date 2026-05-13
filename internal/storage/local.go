@@ -62,6 +62,9 @@ func (l *Local) SaveUploadedFile(file io.Reader, originalName string) (relativeP
 	}
 
 	mimeType = http.DetectContentType(head[:n])
+	if ext == ".svg" {
+		mimeType = "image/svg+xml"
+	}
 	return relativePath, mimeType, hex.EncodeToString(hash.Sum(nil)), written, nil
 }
 

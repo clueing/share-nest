@@ -179,8 +179,8 @@
               <td data-label="名称">
                 <div class="item-name">{{.Name}}</div>
                 <div class="item-meta">
-                  {{if .PasswordProtected}}<span class="tag">密码</span>{{else}}<span class="tag tag-soft">公开</span>{{end}}
-                  {{if .Ext}}<span class="tag tag-plain">.{{.Ext}}</span>{{end}}
+                  {{if .PasswordProtected}}<span class="status-tag">密码</span>{{else}}<span class="status-tag status-tag-soft">公开</span>{{end}}
+                  {{if .Ext}}<span class="status-tag status-tag-plain">.{{.Ext}}</span>{{end}}
                 </div>
               </td>
               <td data-label="类型"><span class="type-badge">{{.Kind}}</span></td>
@@ -283,10 +283,10 @@
               <td data-label="时间">{{formatTime .CreatedAt}}</td>
               <td data-label="资源">
                 <div class="item-name">{{.ItemName}}</div>
-                {{if .ShareCode}}<div class="item-meta"><span class="tag tag-plain">{{.ShareCode}}</span></div>{{end}}
+                {{if .ShareCode}}<div class="item-meta"><span class="status-tag status-tag-plain">{{.ShareCode}}</span></div>{{end}}
               </td>
               <td data-label="事件"><span class="type-badge">{{.EventType}}</span></td>
-              <td data-label="结果"><span class="tag {{if eq .Status "success"}}tag-soft{{else if eq .Status "denied"}}tag{{else}}tag-plain{{end}}">{{.Status}}</span></td>
+              <td data-label="结果"><span class="status-tag {{if eq .Status "success"}}status-tag-soft{{else if eq .Status "denied"}}status-tag{{else}}status-tag-plain{{end}}">{{.Status}}</span></td>
               <td data-label="IP">{{.ClientIP}}</td>
               <td data-label="说明">{{if .Message}}{{.Message}}{{else}}-{{end}}</td>
             </tr>

@@ -46,7 +46,6 @@ var textExts = map[string]struct{}{
 	"html": {},
 	"htm":  {},
 	"css":  {},
-	"svg":  {},
 }
 
 func Detect(kind, mimeType, name string) Mode {
@@ -57,6 +56,9 @@ func Detect(kind, mimeType, name string) Mode {
 	ext := strings.TrimPrefix(strings.ToLower(filepath.Ext(name)), ".")
 	mimeType = strings.ToLower(mimeType)
 
+	if ext == "svg" || mimeType == "image/svg+xml" {
+		return ModeImage
+	}
 	if _, ok := textExts[ext]; ok {
 		return ModeText
 	}
