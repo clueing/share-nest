@@ -34,7 +34,6 @@
 ![管理后台](docs/screenshots/dashboard.png)
 ![文本分享页](docs/screenshots/share-text.png)
 ![文件分享页](docs/screenshots/share-file.png)
-![移动端预览](docs/screenshots/mobile.png)
 
 ## 运行要求
 
