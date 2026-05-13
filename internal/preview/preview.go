@@ -8,12 +8,13 @@ import (
 type Mode string
 
 const (
-	ModeNone  Mode = "none"
-	ModeText  Mode = "text"
-	ModeImage Mode = "image"
-	ModeAudio Mode = "audio"
-	ModeVideo Mode = "video"
-	ModePDF   Mode = "pdf"
+	ModeNone    Mode = "none"
+	ModeText    Mode = "text"
+	ModeImage   Mode = "image"
+	ModeAudio   Mode = "audio"
+	ModeVideo   Mode = "video"
+	ModePDF     Mode = "pdf"
+	ModeArchive Mode = "archive"
 )
 
 var textExts = map[string]struct{}{
@@ -83,6 +84,9 @@ func Detect(kind, mimeType, name string) Mode {
 	}
 	if strings.HasPrefix(mimeType, "text/") {
 		return ModeText
+	}
+	if ArchiveFormat(name, mimeType) != "" {
+		return ModeArchive
 	}
 	if _, ok := audioExts[ext]; ok {
 		return ModeAudio

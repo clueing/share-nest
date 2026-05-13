@@ -63,25 +63,26 @@ type dashboardData struct {
 }
 
 type sharePageData struct {
-	SiteName     string
-	Item         model.SharedItem
-	Locked       bool
-	Error        string
-	Expired      bool
-	NoDownloads  bool
-	CanCopyText  bool
+	SiteName       string
+	Item           model.SharedItem
+	Locked         bool
+	Error          string
+	Expired        bool
+	NoDownloads    bool
+	CanCopyText    bool
 	CopyTextSource string
-	DownloadsLeft int
-	PreviewMode  preview.Mode
-	TextHTML     template.HTML
-	MarkdownHTML template.HTML
-	CodeThemeCSS template.CSS
-	IsMarkdown   bool
+	DownloadsLeft  int
+	PreviewMode    preview.Mode
+	TextHTML       template.HTML
+	MarkdownHTML   template.HTML
+	CodeThemeCSS   template.CSS
+	ArchivePreview *preview.ArchiveSummary
+	IsMarkdown     bool
 	CodeLanguageLabel string
-	Truncated    bool
-	PreviewLimit int64
-	RawURL       string
-	DownloadURL  string
+	Truncated      bool
+	PreviewLimit   int64
+	RawURL         string
+	DownloadURL    string
 }
 
 type flashData struct {
@@ -683,7 +684,7 @@ func (s *Server) serveItemContentPrepared(w http.ResponseWriter, r *http.Request
 		disposition = "attachment"
 	}
 	mode := preview.Detect(item.Kind, item.MIMEType, item.Name)
-	if !download && mode == preview.ModeNone {
+	if !download && (mode == preview.ModeNone || mode == preview.ModeArchive) {
 		disposition = "attachment"
 	}
 	if !download && strings.EqualFold(item.Ext, "svg") {
@@ -722,6 +723,7 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 	mode := preview.Detect(item.Kind, item.MIMEType, item.Name)
 	textHTML := template.HTML("")
 	markdownHTML := template.HTML("")
+	var archivePreview *preview.ArchiveSummary
 	truncated := false
 	isMarkdown := preview.IsMarkdown(item.Name, item.MIMEType)
 	codeLanguage := preview.CodeLanguage(item.Name, item.MIMEType)
@@ -742,28 +744,35 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 		if item.Kind == "text" && item.ContentText != "" {
 			copyTextSource = item.ContentText
 		}
+	} else if mode == preview.ModeArchive {
+		var err error
+		archivePreview, err = s.loadArchivePreview(item)
+		if err != nil {
+			errText = "加载压缩包预览失败"
+		}
 	}
 
 	data := sharePageData{
-		SiteName:     s.cfg.SiteName,
-		Item:         item,
-		Locked:       false,
-		Error:        errText,
-		Expired:      false,
-		NoDownloads:  s.downloadLimitReached(item),
-		CanCopyText:  mode == preview.ModeText,
+		SiteName:       s.cfg.SiteName,
+		Item:           item,
+		Locked:         false,
+		Error:          errText,
+		Expired:        false,
+		NoDownloads:    s.downloadLimitReached(item),
+		CanCopyText:    mode == preview.ModeText,
 		CopyTextSource: copyTextSource,
-		DownloadsLeft: s.downloadsLeft(item),
-		PreviewMode:  mode,
-		TextHTML:     textHTML,
-		MarkdownHTML: markdownHTML,
-		CodeThemeCSS: preview.ThemeCSS(),
-		IsMarkdown:   isMarkdown,
+		DownloadsLeft:  s.downloadsLeft(item),
+		PreviewMode:    mode,
+		TextHTML:       textHTML,
+		MarkdownHTML:   markdownHTML,
+		CodeThemeCSS:   preview.ThemeCSS(),
+		ArchivePreview: archivePreview,
+		IsMarkdown:     isMarkdown,
 		CodeLanguageLabel: preview.LanguageLabel(codeLanguage),
-		Truncated:    truncated,
-		PreviewLimit: s.cfg.PreviewLimit,
-		RawURL:       "/s/" + item.ShareCode + "/raw",
-		DownloadURL:  "/s/" + item.ShareCode + "/download",
+		Truncated:      truncated,
+		PreviewLimit:   s.cfg.PreviewLimit,
+		RawURL:         "/s/" + item.ShareCode + "/raw",
+		DownloadURL:    "/s/" + item.ShareCode + "/download",
 	}
 	s.render(w, "share", data, http.StatusOK)
 }
@@ -831,6 +840,18 @@ func (s *Server) loadTextPreview(item model.SharedItem) (string, bool, error) {
 		return item.ContentText, false, nil
 	}
 	return s.storage.ReadText(item.StoragePath, s.cfg.PreviewLimit)
+}
+
+func (s *Server) loadArchivePreview(item model.SharedItem) (*preview.ArchiveSummary, error) {
+	if item.Kind != "file" {
+		return nil, fmt.Errorf("archive preview only supports files")
+	}
+	file, err := s.storage.Open(item.StoragePath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return preview.InspectArchive(item.Name, file, item.Size)
 }
 
 func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {

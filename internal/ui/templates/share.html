@@ -105,6 +105,55 @@
         </video>
         <p class="preview-note">支持常见视频格式预览；如果浏览器无法播放，请直接下载查看。</p>
       </div>
+      {{else if eq .PreviewMode "archive"}}
+      {{if .ArchivePreview}}
+      <div class="archive-preview">
+        <div class="archive-overview">
+          <div class="archive-stat">
+            <span>格式</span>
+            <strong>{{.ArchivePreview.FormatLabel}}</strong>
+          </div>
+          <div class="archive-stat">
+            <span>条目总数</span>
+            <strong>{{.ArchivePreview.EntryCount}}</strong>
+          </div>
+          <div class="archive-stat">
+            <span>文件 / 目录</span>
+            <strong>{{.ArchivePreview.FileCount}} / {{.ArchivePreview.DirCount}}</strong>
+          </div>
+          <div class="archive-stat">
+            <span>解压后大小</span>
+            <strong>{{if .ArchivePreview.TotalSizeKnown}}{{humanSize .ArchivePreview.TotalSize}}{{else}}大小未知{{end}}</strong>
+          </div>
+        </div>
+        {{if .ArchivePreview.Note}}
+        <p class="preview-note archive-note">{{.ArchivePreview.Note}}</p>
+        {{end}}
+        {{if .ArchivePreview.Entries}}
+        <div class="archive-entry-list">
+          {{range .ArchivePreview.Entries}}
+          <article class="archive-entry">
+            <div class="archive-entry-main">
+              <div class="archive-entry-path">{{.Path}}</div>
+              <div class="archive-entry-meta">
+                <span>{{.Kind}}</span>
+                <span>{{if .SizeKnown}}{{humanSize .Size}}{{else}}大小未知{{end}}</span>
+                {{if .ModifiedText}}<span>{{.ModifiedText}}</span>{{end}}
+              </div>
+            </div>
+          </article>
+          {{end}}
+        </div>
+        {{if .ArchivePreview.Truncated}}
+        <p class="preview-note">条目较多，当前仅展示前 {{len .ArchivePreview.Entries}} 项。</p>
+        {{end}}
+        {{else}}
+        <div class="empty-state">压缩包中没有可展示的条目。</div>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="empty-state">当前压缩包暂时无法解析，请直接下载查看。</div>
+      {{end}}
       {{else}}
       <div class="empty-state">
         当前格式暂不支持在线预览，请直接下载查看。

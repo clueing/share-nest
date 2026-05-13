@@ -94,6 +94,12 @@ func mimeByExtension(ext string) (string, bool) {
 		return "video/ogg", true
 	case ".mov":
 		return "video/quicktime", true
+	case ".zip":
+		return "application/zip", true
+	case ".tar":
+		return "application/x-tar", true
+	case ".tgz", ".gz":
+		return "application/gzip", true
 	default:
 		return "", false
 	}
