@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -15,17 +16,20 @@ import (
 )
 
 type SQLiteRepo struct {
-	db *sql.DB
+	db                 *sql.DB
+	accessLogRetention int
 }
 
-func NewSQLite(path string) (*SQLiteRepo, error) {
+func NewSQLite(path string, accessLogRetention int) (*SQLiteRepo, error) {
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(1)
-	return &SQLiteRepo{db: db}, nil
+	maxConns := minInt(maxInt(runtime.NumCPU(), 2), 4)
+	db.SetMaxOpenConns(maxConns)
+	db.SetMaxIdleConns(maxConns)
+	return &SQLiteRepo{db: db, accessLogRetention: accessLogRetention}, nil
 }
 
 func (r *SQLiteRepo) Close() error {
@@ -35,6 +39,9 @@ func (r *SQLiteRepo) Close() error {
 func (r *SQLiteRepo) Init() error {
 	schema := `
 PRAGMA foreign_keys = ON;
+PRAGMA journal_mode = WAL;
+PRAGMA synchronous = NORMAL;
+PRAGMA busy_timeout = 5000;
 
 CREATE TABLE IF NOT EXISTS items (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -139,14 +146,20 @@ func (r *SQLiteRepo) CreateItemWithShare(ctx context.Context, item model.Item, p
 	var shareCode string
 	accessToken := ""
 	if passwordHash != "" {
-		accessToken = security.RandomString(24)
+		accessToken, err = security.RandomString(24)
+		if err != nil {
+			return model.ItemSummary{}, err
+		}
 	}
 	var expiresUnix int64
 	if expiresAt != nil {
 		expiresUnix = expiresAt.Unix()
 	}
 	for range 8 {
-		shareCode = security.RandomString(10)
+		shareCode, err = security.RandomString(10)
+		if err != nil {
+			return model.ItemSummary{}, err
+		}
 		_, err = tx.ExecContext(
 			ctx,
 			`INSERT INTO shares (item_id, share_code, password_hash, password_plain, access_token, expires_at, max_downloads, download_count, enabled, created_at)
@@ -388,7 +401,11 @@ func (r *SQLiteRepo) backfillAccessTokens() error {
 	}
 
 	for _, id := range ids {
-		if _, err := r.db.Exec(`UPDATE shares SET access_token = ? WHERE id = ?`, security.RandomString(24), id); err != nil {
+		token, err := security.RandomString(24)
+		if err != nil {
+			return err
+		}
+		if _, err := r.db.Exec(`UPDATE shares SET access_token = ? WHERE id = ?`, token, id); err != nil {
 			return err
 		}
 	}
@@ -472,7 +489,22 @@ func (r *SQLiteRepo) CreateAccessLog(ctx context.Context, entry model.AccessLog)
 		entry.UserAgent,
 		time.Now().Unix(),
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if r.accessLogRetention > 0 {
+		if _, err := r.db.ExecContext(ctx, `
+DELETE FROM access_logs
+WHERE id NOT IN (
+	SELECT id
+	FROM access_logs
+	ORDER BY created_at DESC, id DESC
+	LIMIT ?
+)`, r.accessLogRetention); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *SQLiteRepo) ListRecentAccessLogs(ctx context.Context, limit int) ([]model.AccessLog, error) {
@@ -526,4 +558,18 @@ func unixToTimePtr(value int64) *time.Time {
 	}
 	t := time.Unix(value, 0)
 	return &t
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

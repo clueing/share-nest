@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -27,9 +26,7 @@ func NewLocal(root string) (*Local, error) {
 	return &Local{root: root}, nil
 }
 
-func (l *Local) SaveUploadedFile(file multipart.File, originalName string) (relativePath, mimeType, shaValue string, size int64, err error) {
-	defer file.Close()
-
+func (l *Local) SaveUploadedFile(file io.Reader, originalName string) (relativePath, mimeType, shaValue string, size int64, err error) {
 	head := make([]byte, 512)
 	n, readErr := file.Read(head)
 	if readErr != nil && readErr != io.EOF {
@@ -43,7 +40,11 @@ func (l *Local) SaveUploadedFile(file multipart.File, originalName string) (rela
 	}
 
 	ext := strings.ToLower(filepath.Ext(originalName))
-	filename := security.RandomString(16) + ext
+	filenameBase, err := security.RandomString(16)
+	if err != nil {
+		return "", "", "", 0, err
+	}
+	filename := filenameBase + ext
 	relativePath = filepath.ToSlash(filepath.Join(subdir, filename))
 	fullPath := filepath.Join(l.root, filepath.FromSlash(relativePath))
 

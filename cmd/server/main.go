@@ -27,7 +27,11 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("加载配置失败", "错误", err)
+		os.Exit(1)
+	}
 	slog.Info("已加载配置", "站点", cfg.SiteName, "监听", cfg.Addr, "数据目录", cfg.DataDir, "分页", cfg.PageSize)
 
 	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
@@ -49,7 +53,7 @@ func main() {
 	}
 	slog.Info("文件存储已就绪", "路径", filepath.Join(cfg.DataDir, "files"))
 
-	dbRepo, err := repo.NewSQLite(cfg.DBPath)
+	dbRepo, err := repo.NewSQLite(cfg.DBPath, cfg.AccessLogRetention)
 	if err != nil {
 		slog.Error("打开数据库失败", "错误", err)
 		os.Exit(1)

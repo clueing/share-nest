@@ -2,16 +2,18 @@ package security
 
 import (
 	"crypto/hmac"
+	"crypto/pbkdf2"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
-const passwordIterations = 120000
+const passwordIterations = 310000
 
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, 16)
@@ -19,13 +21,21 @@ func HashPassword(password string) (string, error) {
 		return "", err
 	}
 
-	sum := deriveKey(password, salt, passwordIterations)
-	return fmt.Sprintf("sha256$%d$%s$%s", passwordIterations, base64.RawStdEncoding.EncodeToString(salt), hex.EncodeToString(sum)), nil
+	sum, err := pbkdf2.Key(sha256.New, password, salt, passwordIterations, 32)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("pbkdf2-sha256$%d$%s$%s", passwordIterations, base64.RawStdEncoding.EncodeToString(salt), hex.EncodeToString(sum)), nil
 }
 
 func VerifyPassword(encoded, password string) bool {
 	parts := strings.Split(encoded, "$")
-	if len(parts) != 4 || parts[0] != "sha256" {
+	if len(parts) != 4 {
+		return false
+	}
+
+	iterations, err := strconv.Atoi(parts[1])
+	if err != nil || iterations <= 0 {
 		return false
 	}
 
@@ -39,7 +49,18 @@ func VerifyPassword(encoded, password string) bool {
 		return false
 	}
 
-	actual := deriveKey(password, salt, passwordIterations)
+	var actual []byte
+	switch parts[0] {
+	case "pbkdf2-sha256":
+		actual, err = pbkdf2.Key(sha256.New, password, salt, iterations, len(expected))
+		if err != nil {
+			return false
+		}
+	case "sha256":
+		actual = deriveLegacyKey(password, salt, iterations)
+	default:
+		return false
+	}
 	return subtle.ConstantTimeCompare(actual, expected) == 1
 }
 
@@ -53,20 +74,20 @@ func EqualString(a, b string) bool {
 	return subtle.ConstantTimeCompare([]byte(a), []byte(b)) == 1
 }
 
-func RandomString(length int) string {
+func RandomString(length int) (string, error) {
 	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 	bytes := make([]byte, length)
 	random := make([]byte, length)
 	if _, err := rand.Read(random); err != nil {
-		return "sharecode00"
+		return "", err
 	}
 	for i := range bytes {
 		bytes[i] = alphabet[int(random[i])%len(alphabet)]
 	}
-	return string(bytes)
+	return string(bytes), nil
 }
 
-func deriveKey(password string, salt []byte, iterations int) []byte {
+func deriveLegacyKey(password string, salt []byte, iterations int) []byte {
 	buf := make([]byte, 0, len(salt)+len(password))
 	buf = append(buf, salt...)
 	buf = append(buf, password...)
@@ -82,4 +103,3 @@ func deriveKey(password string, salt []byte, iterations int) []byte {
 	copy(final, result)
 	return final
 }
-

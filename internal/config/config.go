@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -21,13 +22,18 @@ type Config struct {
 	MaxUploadSize int64
 	PreviewLimit  int64
 	PageSize      int
+	AccessLogRetention int
 }
 
-func Load() Config {
+func Load() (Config, error) {
 	loadDotEnv(".env")
 
 	dataDir := getEnv("FILESERVICE_DATA_DIR", "data")
 	dbPath := getEnv("FILESERVICE_DB_PATH", filepath.Join(dataDir, "app.db"))
+	sessionSecret, err := loadOrCreateSessionSecret(dataDir)
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
 		Addr:          getEnv("FILESERVICE_ADDR", ":8080"),
@@ -37,11 +43,12 @@ func Load() Config {
 		SiteName:      getEnv("FILESERVICE_SITE_NAME", "File Service"),
 		AdminUser:     getEnv("FILESERVICE_ADMIN_USER", "admin"),
 		AdminPass:     getEnv("FILESERVICE_ADMIN_PASS", "admin123"),
-		SessionSecret: getEnv("FILESERVICE_SESSION_SECRET", randomSecret()),
+		SessionSecret: sessionSecret,
 		MaxUploadSize: getEnvInt64("FILESERVICE_MAX_UPLOAD_SIZE", 64<<20),
 		PreviewLimit:  getEnvInt64("FILESERVICE_PREVIEW_LIMIT", 1<<20),
 		PageSize:      getEnvInt("FILESERVICE_PAGE_SIZE", 10),
-	}
+		AccessLogRetention: getEnvInt("FILESERVICE_ACCESS_LOG_RETENTION", 5000),
+	}, nil
 }
 
 func getEnv(key, fallback string) string {
@@ -80,9 +87,37 @@ func getEnvInt(key string, fallback int) int {
 func randomSecret() string {
 	buf := make([]byte, 32)
 	if _, err := rand.Read(buf); err != nil {
-		return "file-service-default-secret"
+		return ""
 	}
 	return hex.EncodeToString(buf)
+}
+
+func loadOrCreateSessionSecret(dataDir string) (string, error) {
+	if value := strings.TrimSpace(os.Getenv("FILESERVICE_SESSION_SECRET")); value != "" {
+		return value, nil
+	}
+
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return "", err
+	}
+
+	secretPath := filepath.Join(dataDir, "session_secret")
+	if data, err := os.ReadFile(secretPath); err == nil {
+		if secret := strings.TrimSpace(string(data)); secret != "" {
+			return secret, nil
+		}
+	} else if !os.IsNotExist(err) {
+		return "", err
+	}
+
+	secret := randomSecret()
+	if secret == "" {
+		return "", fmt.Errorf("generate session secret: crypto/rand unavailable")
+	}
+	if err := os.WriteFile(secretPath, []byte(secret), 0o600); err != nil {
+		return "", err
+	}
+	return secret, nil
 }
 
 func loadDotEnv(path string) {

@@ -66,7 +66,11 @@ $env:FILESERVICE_ADMIN_USER="admin"
 $env:FILESERVICE_ADMIN_PASS="admin123"
 $env:FILESERVICE_SESSION_SECRET="replace-with-random-secret"
 $env:FILESERVICE_PAGE_SIZE="10"
+$env:FILESERVICE_ACCESS_LOG_RETENTION="5000"
 ```
+
+如果未显式配置 `FILESERVICE_SESSION_SECRET`，程序会在 `data/session_secret` 生成并持久化一个随机 secret。
+公网部署建议显式配置，避免多实例或迁移时会话不一致。
 
 ## 默认访问地址
 

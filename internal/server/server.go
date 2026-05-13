@@ -12,8 +12,10 @@ import (
 	"io"
 	"io/fs"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -83,6 +85,11 @@ type flashData struct {
 	PasswordURL   string `json:"password_url"`
 	SharePassword string `json:"share_password"`
 	AutoCopy      string `json:"auto_copy"`
+}
+
+type preparedContent struct {
+	file    *os.File
+	modTime time.Time
 }
 
 func New(cfg config.Config, repo *repo.SQLiteRepo, fileStorage *storage.Local) (*Server, error) {
@@ -186,6 +193,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   s.isHTTPSRequest(r),
 	})
 	http.Redirect(w, r, "/admin", http.StatusSeeOther)
 }
@@ -198,6 +206,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		MaxAge:   -1,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   s.isHTTPSRequest(r),
 	})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
@@ -255,47 +264,99 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxUploadSize)
-	if err := r.ParseMultipartForm(s.cfg.MaxUploadSize); err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：文件过大或表单格式错误"})
+	reader, err := r.MultipartReader()
+	if err != nil {
+		s.redirectAdminMessageAtPage(w, r, 1, flashData{Message: "上传文件失败：文件过大或表单格式错误"})
 		return
 	}
 
-	file, header, err := r.FormFile("file")
-	if err != nil {
+	currentPage := 1
+	sharePassword := ""
+	expiresAtValue := ""
+	maxDownloadsValue := ""
+	var fileName string
+	var path string
+	var mimeType string
+	var shaValue string
+	var size int64
+	fileChosen := false
+
+	for {
+		part, err := reader.NextPart()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			if path != "" {
+				_ = s.storage.Remove(path)
+			}
+			s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：表单读取异常"})
+			return
+		}
+
+		func() {
+			defer part.Close()
+
+			switch part.FormName() {
+			case "page":
+				currentPage = parsePositiveInt(readMultipartValue(part, 32), 1)
+			case "share_password":
+				sharePassword = strings.TrimSpace(readMultipartValue(part, 1024))
+			case "expires_at":
+				expiresAtValue = readMultipartValue(part, 64)
+			case "max_downloads":
+				maxDownloadsValue = readMultipartValue(part, 32)
+			case "file":
+				if fileChosen || strings.TrimSpace(part.FileName()) == "" {
+					return
+				}
+				fileName = part.FileName()
+				path, mimeType, shaValue, size, err = s.storage.SaveUploadedFile(part, fileName)
+				if err == nil {
+					fileChosen = true
+				}
+			}
+		}()
+		if err != nil {
+			if path != "" {
+				_ = s.storage.Remove(path)
+			}
+			s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：无法保存文件"})
+			return
+		}
+	}
+
+	if !fileChosen {
 		slog.Warn("上传被取消或未选择文件", "请求ID", requestIDFromContext(r))
-		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：未选择文件"})
+		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：未选择文件"})
 		return
 	}
 
-	passwordHash, err := s.hashOptionalPassword(strings.TrimSpace(r.FormValue("share_password")))
+	passwordHash, err := s.hashOptionalPassword(sharePassword)
 	if err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：密码处理异常"})
+		_ = s.storage.Remove(path)
+		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：密码处理异常"})
 		return
 	}
-	sharePassword := strings.TrimSpace(r.FormValue("share_password"))
-	expiresAt, err := parseOptionalDateTimeLocal(r.FormValue("expires_at"))
+	expiresAt, err := parseOptionalDateTimeLocal(expiresAtValue)
 	if err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：过期时间格式错误"})
+		_ = s.storage.Remove(path)
+		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：过期时间格式错误"})
 		return
 	}
-	maxDownloads, err := parseNonNegativeInt(r.FormValue("max_downloads"))
+	maxDownloads, err := parseNonNegativeInt(maxDownloadsValue)
 	if err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：下载次数限制格式错误"})
-		return
-	}
-
-	path, mimeType, shaValue, size, err := s.storage.SaveUploadedFile(file, header.Filename)
-	if err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：无法保存文件"})
+		_ = s.storage.Remove(path)
+		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：下载次数限制格式错误"})
 		return
 	}
 
 	item := model.Item{
 		Kind:        "file",
-		Name:        header.Filename,
+		Name:        fileName,
 		StoragePath: path,
 		MIMEType:    mimeType,
-		Ext:         strings.TrimPrefix(strings.ToLower(filepath.Ext(header.Filename)), "."),
+		Ext:         strings.TrimPrefix(strings.ToLower(filepath.Ext(fileName)), "."),
 		Size:        size,
 		SHA256:      shaValue,
 	}
@@ -304,22 +365,22 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		_ = s.storage.Remove(path)
 		slog.Error("上传文件后创建分享失败",
 			"请求ID", requestIDFromContext(r),
-			"文件名", header.Filename,
+			"文件名", fileName,
 			"错误", err,
 		)
-		s.redirectAdminMessage(w, r, flashData{Message: "上传文件失败：数据库写入异常"})
+		s.redirectAdminMessageAtPage(w, r, currentPage, flashData{Message: "上传文件失败：数据库写入异常"})
 		return
 	}
 	slog.Info("文件上传成功",
 		"请求ID", requestIDFromContext(r),
 		"资源ID", summary.ID,
-		"文件名", header.Filename,
+		"文件名", fileName,
 		"大小", size,
 		"过期时间", formatTimePtr(expiresAt),
 		"下载限制", maxDownloads,
 	)
 
-	s.redirectAdminMessage(w, r, s.buildSuccessFlash(r, summary, sharePassword, "文件已上传并生成分享链接"))
+	s.redirectAdminMessageAtPage(w, r, currentPage, s.buildSuccessFlash(r, summary, sharePassword, "文件已上传并生成分享链接"))
 }
 
 func (s *Server) handleCreateText(w http.ResponseWriter, r *http.Request) {
@@ -516,7 +577,7 @@ func (s *Server) handleShareVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logAccess(r, share, "password_verify", "success", "")
-	s.setShareCookie(w, share)
+	s.setShareCookie(w, r, share)
 	http.Redirect(w, r, "/s/"+share.ShareCode, http.StatusSeeOther)
 }
 
@@ -542,8 +603,15 @@ func (s *Server) handleShareRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	prepared, err := s.prepareContent(share)
+	if err != nil {
+		s.handleContentPrepareError(w, r, share, err, "preview")
+		return
+	}
+	defer prepared.close()
+
 	s.logAccess(r, share, "preview", "success", "")
-	s.serveItemContent(w, r, share, false)
+	s.serveItemContentPrepared(w, r, share, false, prepared)
 }
 
 func (s *Server) handleShareDownload(w http.ResponseWriter, r *http.Request) {
@@ -562,6 +630,12 @@ func (s *Server) handleShareDownload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "需要先验证分享密码", http.StatusUnauthorized)
 		return
 	}
+	prepared, err := s.prepareContent(share)
+	if err != nil {
+		s.handleContentPrepareError(w, r, share, err, "download")
+		return
+	}
+	defer prepared.close()
 	ok, err := s.repo.IncrementDownloadCount(r.Context(), share.ID)
 	if err != nil {
 		s.logAccess(r, share, "download", "error", "increment download count failed")
@@ -576,12 +650,26 @@ func (s *Server) handleShareDownload(w http.ResponseWriter, r *http.Request) {
 	share.DownloadCount++
 
 	s.logAccess(r, share, "download", "success", "")
-	s.serveItemContent(w, r, share, true)
+	s.serveItemContentPrepared(w, r, share, true, prepared)
 }
 
 func (s *Server) serveItemContent(w http.ResponseWriter, r *http.Request, item model.SharedItem, download bool) {
+	prepared, err := s.prepareContent(item)
+	if err != nil {
+		s.handleContentPrepareError(w, r, item, err, "preview")
+		return
+	}
+	defer prepared.close()
+	s.serveItemContentPrepared(w, r, item, download, prepared)
+}
+
+func (s *Server) serveItemContentPrepared(w http.ResponseWriter, r *http.Request, item model.SharedItem, download bool, prepared *preparedContent) {
 	disposition := "inline"
 	if download {
+		disposition = "attachment"
+	}
+	mode := preview.Detect(item.Kind, item.MIMEType, item.Name)
+	if !download && mode == preview.ModeNone {
 		disposition = "attachment"
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
@@ -592,7 +680,7 @@ func (s *Server) serveItemContent(w http.ResponseWriter, r *http.Request, item m
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`%s; filename="%s"`, disposition, filename))
 
 	if item.Kind == "text" {
-		if item.MIMEType != "" {
+		if download && item.MIMEType != "" {
 			w.Header().Set("Content-Type", item.MIMEType)
 		} else {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -601,23 +689,16 @@ func (s *Server) serveItemContent(w http.ResponseWriter, r *http.Request, item m
 		return
 	}
 
-	file, err := s.storage.Open(item.StoragePath)
-	if err != nil {
+	if !download && mode == preview.ModeText {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	} else if item.MIMEType != "" {
+		w.Header().Set("Content-Type", item.MIMEType)
+	}
+	if prepared == nil || prepared.file == nil {
 		http.Error(w, "文件不存在", http.StatusNotFound)
 		return
 	}
-	defer file.Close()
-
-	if item.MIMEType != "" {
-		w.Header().Set("Content-Type", item.MIMEType)
-	}
-
-	stat, err := file.Stat()
-	if err != nil {
-		http.Error(w, "读取文件失败", http.StatusInternalServerError)
-		return
-	}
-	http.ServeContent(w, r, item.Name, stat.ModTime(), file)
+	http.ServeContent(w, r, item.Name, prepared.modTime, prepared.file)
 }
 
 func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item model.SharedItem, errText string) {
@@ -757,7 +838,7 @@ func (s *Server) tryShareQueryAccess(w http.ResponseWriter, r *http.Request, ite
 	if token := strings.TrimSpace(query.Get("token")); token != "" && item.AccessToken != "" {
 		if security.EqualString(token, item.AccessToken) {
 			s.logAccess(r, item, "password_verify", "success", "token access")
-			s.setShareCookie(w, item)
+			s.setShareCookie(w, r, item)
 			http.Redirect(w, r, "/s/"+item.ShareCode, http.StatusSeeOther)
 			return true
 		}
@@ -769,7 +850,7 @@ func (s *Server) tryShareQueryAccess(w http.ResponseWriter, r *http.Request, ite
 	}
 	if password != "" && security.VerifyPassword(item.PasswordHash, password) {
 		s.logAccess(r, item, "password_verify", "success", "password url access")
-		s.setShareCookie(w, item)
+		s.setShareCookie(w, r, item)
 		http.Redirect(w, r, "/s/"+item.ShareCode, http.StatusSeeOther)
 		return true
 	}
@@ -785,13 +866,14 @@ func (s *Server) shareCookieValue(item model.SharedItem) string {
 	return security.SignToken(s.cfg.SessionSecret, "share:"+item.ShareCode+":"+item.PasswordHash)
 }
 
-func (s *Server) setShareCookie(w http.ResponseWriter, item model.SharedItem) {
+func (s *Server) setShareCookie(w http.ResponseWriter, r *http.Request, item model.SharedItem) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.shareCookieName(item.ShareCode),
 		Value:    s.shareCookieValue(item),
 		Path:     "/s/" + item.ShareCode,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   s.isHTTPSRequest(r),
 	})
 }
 
@@ -823,9 +905,13 @@ func (s *Server) hashOptionalPassword(password string) (string, error) {
 }
 
 func (s *Server) redirectAdminMessage(w http.ResponseWriter, r *http.Request, flash flashData) {
-	s.writeFlash(w, flash)
+	s.redirectAdminMessageAtPage(w, r, currentAdminPage(r), flash)
+}
+
+func (s *Server) redirectAdminMessageAtPage(w http.ResponseWriter, r *http.Request, page int, flash flashData) {
+	s.writeFlash(w, r, flash)
 	target := "/admin"
-	if page := currentAdminPage(r); page > 1 {
+	if page > 1 {
 		target += "?page=" + strconv.Itoa(page)
 	}
 	http.Redirect(w, r, target, http.StatusSeeOther)
@@ -934,13 +1020,15 @@ func (s *Server) envExample() string {
 		"FILESERVICE_DATA_DIR=" + s.cfg.DataDir,
 		"FILESERVICE_ADMIN_USER=" + s.cfg.AdminUser,
 		"FILESERVICE_ADMIN_PASS=change-me",
+		"FILESERVICE_SESSION_SECRET=change-me",
 		"FILESERVICE_MAX_UPLOAD_SIZE=" + strconv.FormatInt(s.cfg.MaxUploadSize, 10),
 		"FILESERVICE_PREVIEW_LIMIT=" + strconv.FormatInt(s.cfg.PreviewLimit, 10),
 		"FILESERVICE_PAGE_SIZE=" + strconv.Itoa(s.cfg.PageSize),
+		"FILESERVICE_ACCESS_LOG_RETENTION=" + strconv.Itoa(s.cfg.AccessLogRetention),
 	}, "\n")
 }
 
-func (s *Server) writeFlash(w http.ResponseWriter, flash flashData) {
+func (s *Server) writeFlash(w http.ResponseWriter, r *http.Request, flash flashData) {
 	payload, err := json.Marshal(flash)
 	if err != nil {
 		return
@@ -953,6 +1041,7 @@ func (s *Server) writeFlash(w http.ResponseWriter, flash flashData) {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   120,
+		Secure:   s.isHTTPSRequest(r),
 	})
 }
 
@@ -969,6 +1058,7 @@ func (s *Server) readFlash(w http.ResponseWriter, r *http.Request) flashData {
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
+		Secure:   s.isHTTPSRequest(r),
 	})
 
 	raw, err := base64.RawURLEncoding.DecodeString(cookie.Value)
@@ -1222,4 +1312,62 @@ func requestPath(r *http.Request) string {
 		return r.URL.Path
 	}
 	return r.URL.Path + "?" + r.URL.RawQuery
+}
+
+func (p *preparedContent) close() {
+	if p == nil || p.file == nil {
+		return
+	}
+	_ = p.file.Close()
+}
+
+func (s *Server) prepareContent(item model.SharedItem) (*preparedContent, error) {
+	if item.Kind == "text" {
+		return &preparedContent{}, nil
+	}
+
+	file, err := s.storage.Open(item.StoragePath)
+	if err != nil {
+		return nil, err
+	}
+
+	stat, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, err
+	}
+
+	return &preparedContent{
+		file:    file,
+		modTime: stat.ModTime(),
+	}, nil
+}
+
+func (s *Server) handleContentPrepareError(w http.ResponseWriter, r *http.Request, item model.SharedItem, err error, eventType string) {
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		s.logAccess(r, item, eventType, "error", "file missing")
+		http.Error(w, "文件不存在", http.StatusNotFound)
+	default:
+		s.logAccess(r, item, eventType, "error", "open content failed")
+		http.Error(w, "读取文件失败", http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) isHTTPSRequest(r *http.Request) bool {
+	if r == nil {
+		return strings.HasPrefix(strings.ToLower(s.cfg.BaseURL), "https://")
+	}
+	if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		return true
+	}
+	return strings.HasPrefix(strings.ToLower(s.cfg.BaseURL), "https://")
+}
+
+func readMultipartValue(part *multipart.Part, limit int64) string {
+	data, err := io.ReadAll(io.LimitReader(part, limit))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }

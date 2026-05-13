@@ -29,6 +29,7 @@ var textExts = map[string]struct{}{
 	"toml": {},
 	"go":   {},
 	"js":   {},
+	"mjs":  {},
 	"ts":   {},
 	"jsx":  {},
 	"tsx":  {},
@@ -43,7 +44,9 @@ var textExts = map[string]struct{}{
 	"sh":   {},
 	"sql":  {},
 	"html": {},
+	"htm":  {},
 	"css":  {},
+	"svg":  {},
 }
 
 func Detect(kind, mimeType, name string) Mode {
@@ -74,4 +77,3 @@ func Detect(kind, mimeType, name string) Mode {
 	}
 	return ModeNone
 }
-
