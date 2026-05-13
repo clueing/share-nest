@@ -52,6 +52,7 @@ type dashboardData struct {
 	Flash      flashData
 	EnvPath    string
 	EnvExample string
+	MaxUploadSize int64
 	CurrentPage int
 	TotalPages  int
 	TotalCount  int
@@ -258,6 +259,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Flash:       flash,
 		EnvPath:     ".env",
 		EnvExample:  s.envExample(),
+		MaxUploadSize: s.cfg.MaxUploadSize,
 		CurrentPage: currentPage,
 		TotalPages:  totalPages,
 		TotalCount:  totalCount,

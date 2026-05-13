@@ -24,7 +24,7 @@
     <section class="panel">
       <div class="panel-head">
         <h2>上传文件</h2>
-        <p>上传后自动生成分享链接。</p>
+        <p>上传后自动生成分享链接。当前最大上传限制：{{humanSize .MaxUploadSize}}</p>
       </div>
       <form method="post" action="/admin/upload" enctype="multipart/form-data" class="stack-form" data-upload-form>
         <input type="hidden" name="page" value="{{.CurrentPage}}">
