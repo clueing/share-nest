@@ -73,10 +73,10 @@ type sharePageData struct {
 	CopyTextSource string
 	DownloadsLeft int
 	PreviewMode  preview.Mode
-	TextPreview  string
+	TextHTML     template.HTML
 	MarkdownHTML template.HTML
+	CodeThemeCSS template.CSS
 	IsMarkdown   bool
-	CodeLanguage string
 	CodeLanguageLabel string
 	Truncated    bool
 	PreviewLimit int64
@@ -720,7 +720,7 @@ func (s *Server) serveItemContentPrepared(w http.ResponseWriter, r *http.Request
 
 func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item model.SharedItem, errText string) {
 	mode := preview.Detect(item.Kind, item.MIMEType, item.Name)
-	textPreview := ""
+	textHTML := template.HTML("")
 	markdownHTML := template.HTML("")
 	truncated := false
 	isMarkdown := preview.IsMarkdown(item.Name, item.MIMEType)
@@ -729,11 +729,14 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 
 	if mode == preview.ModeText {
 		var err error
+		var textPreview string
 		textPreview, truncated, err = s.loadTextPreview(item)
 		if err != nil {
 			errText = "加载预览内容失败"
 		} else if isMarkdown {
 			markdownHTML = preview.RenderMarkdown(textPreview)
+		} else {
+			textHTML = preview.RenderCodeHTML(textPreview, codeLanguage)
 		}
 		copyTextSource = textPreview
 		if item.Kind == "text" && item.ContentText != "" {
@@ -752,10 +755,10 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 		CopyTextSource: copyTextSource,
 		DownloadsLeft: s.downloadsLeft(item),
 		PreviewMode:  mode,
-		TextPreview:  textPreview,
+		TextHTML:     textHTML,
 		MarkdownHTML: markdownHTML,
+		CodeThemeCSS: preview.ThemeCSS(),
 		IsMarkdown:   isMarkdown,
-		CodeLanguage: codeLanguage,
 		CodeLanguageLabel: preview.LanguageLabel(codeLanguage),
 		Truncated:    truncated,
 		PreviewLimit: s.cfg.PreviewLimit,

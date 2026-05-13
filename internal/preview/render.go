@@ -204,19 +204,14 @@ func RenderMarkdown(source string) template.HTML {
 			return
 		}
 		language := normalizeFenceLanguage(fenceLang)
+		rendered := RenderCodeHTML(strings.Join(fenceLines, "\n"), language)
 		out.WriteString(`<div class="code-block-shell">`)
 		out.WriteString(`<div class="code-block-head"><span class="code-language-chip">`)
 		out.WriteString(html.EscapeString(LanguageLabel(language)))
 		out.WriteString(`</span></div>`)
-		out.WriteString(`<pre class="markdown-code language-`)
-		out.WriteString(html.EscapeString(language))
-		out.WriteString(`" data-code-language="`)
-		out.WriteString(html.EscapeString(language))
-		out.WriteString(`"><code class="language-`)
-		out.WriteString(html.EscapeString(language))
-		out.WriteString(`">`)
-		out.WriteString(html.EscapeString(strings.Join(fenceLines, "\n")))
-		out.WriteString(`</code></pre></div>`)
+		out.WriteString(`<div class="markdown-code-shell">`)
+		out.WriteString(string(rendered))
+		out.WriteString(`</div></div>`)
 		fenceLines = nil
 		fenceLang = ""
 		inFence = false
