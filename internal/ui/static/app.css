@@ -159,6 +159,13 @@ textarea {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
+.brand-mark-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
 .eyebrow {
   margin: 0 0 var(--space-2);
   font-size: 11px;
