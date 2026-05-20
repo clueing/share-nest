@@ -98,9 +98,12 @@
     metaContent.className = "qr-meta-group";
     metaContent.append(metaLabel, code);
 
-    const passwordContent = document.createElement("div");
-    passwordContent.className = "qr-meta-group";
+    meta.append(metaContent);
+
     if (password) {
+      const passwordContent = document.createElement("div");
+      passwordContent.className = "qr-meta-group";
+
       const passwordLabel = document.createElement("span");
       passwordLabel.className = "qr-meta-label";
       passwordLabel.textContent = "访问密码";
@@ -121,6 +124,7 @@
 
       passwordActions.appendChild(copyPasswordButton);
       passwordContent.append(passwordLabel, passwordCode, passwordActions);
+      meta.append(passwordContent);
     }
 
     const actions = document.createElement("div");
@@ -142,10 +146,6 @@
     openLink.textContent = "打开链接";
 
     actions.append(copyButton, openLink);
-    meta.append(metaContent);
-    if (password) {
-      meta.append(passwordContent);
-    }
     meta.append(note, actions);
     body.append(preview, meta);
     card.append(head, body);
@@ -176,7 +176,7 @@
   const inferType = (message, fallback = "info") => {
     if (!message) return fallback;
     if (/(失败|错误|拒绝|用尽|过期|无法)/.test(message)) return "error";
-    if (/(成功|完成|已|复制)/.test(message)) return "success";
+    if (/(成功|完成|已|复制|保存)/.test(message)) return "success";
     return fallback;
   };
 
@@ -306,6 +306,296 @@
     });
   };
 
+  const bindCopyButtons = (root = document) => {
+    root.querySelectorAll(".js-copy").forEach((button) => {
+      if (button.dataset.copyBound === "true") return;
+      button.dataset.copyBound = "true";
+      button.addEventListener("click", () => {
+        const message = button.dataset.copyMessage || "复制成功";
+        window.AppUI.copyText(button.dataset.copyValue, message);
+      });
+    });
+  };
+
+  const bindShareModal = (modal) => {
+    if (!modal || modal.dataset.modalBound === "true") return;
+    modal.dataset.modalBound = "true";
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        modal.remove();
+      }
+    });
+    modal.querySelectorAll("[data-close-modal]").forEach((button) => {
+      button.addEventListener("click", () => modal.remove());
+    });
+    bindCopyButtons(modal);
+    hydrateQRCodeImages(modal);
+  };
+
+  const initializePasswordButtons = () => {
+    document.querySelectorAll("[data-generate-password]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const input = button.parentElement.querySelector("[data-password-input]");
+        if (!input) return;
+        const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+        const array = new Uint32Array(8);
+        crypto.getRandomValues(array);
+        input.value = Array.from(array, (n) => chars[n % chars.length]).join("");
+        input.focus();
+        window.AppUI.copyText(input.value, "随机密码已生成并复制");
+      });
+    });
+  };
+
+  const initializeBatchSelection = () => {
+    const checkboxes = Array.from(document.querySelectorAll(".item-checkbox"));
+    const selectedCount = document.getElementById("selectedCount");
+    const selectAll = document.getElementById("selectAllItems");
+    if (checkboxes.length === 0) return;
+
+    const updateSelection = () => {
+      const checked = checkboxes.filter((input) => input.checked);
+      if (selectedCount) {
+        selectedCount.textContent = String(checked.length);
+      }
+      if (selectAll) {
+        selectAll.checked = checked.length > 0 && checked.length === checkboxes.length;
+        selectAll.indeterminate = checked.length > 0 && checked.length < checkboxes.length;
+      }
+    };
+
+    checkboxes.forEach((checkbox) => {
+      checkbox.addEventListener("change", updateSelection);
+    });
+
+    if (selectAll) {
+      selectAll.addEventListener("change", () => {
+        checkboxes.forEach((checkbox) => {
+          checkbox.checked = selectAll.checked;
+        });
+        updateSelection();
+      });
+    }
+
+    const copySelectedBtn = document.getElementById("copySelectedBtn");
+    if (copySelectedBtn) {
+      copySelectedBtn.addEventListener("click", () => {
+        const values = checkboxes
+          .filter((checkbox) => checkbox.checked)
+          .map((checkbox) => checkbox.dataset.copyValue)
+          .filter(Boolean);
+        if (values.length === 0) {
+          window.AppUI.notify({ message: "请先选择要复制的资源", type: "info" });
+          return;
+        }
+        window.AppUI.copyText(values.join("\n"), "已复制选中分享链接");
+      });
+    }
+
+    updateSelection();
+  };
+
+  const initializeUploadForms = () => {
+    document.querySelectorAll("[data-upload-form]").forEach((uploadForm) => {
+      if (!(window.XMLHttpRequest && window.FormData)) return;
+
+      const progressWrap = uploadForm.querySelector("[data-upload-progress]");
+      const progressBar = uploadForm.querySelector("[data-upload-bar]");
+      const progressPercent = uploadForm.querySelector("[data-upload-percent]");
+      const progressStatus = uploadForm.querySelector("[data-upload-status]");
+      const submitButton = uploadForm.querySelector("[data-upload-submit]");
+
+      const setUploadState = ({ visible, percent, status, disabled, indeterminate }) => {
+        if (progressWrap) {
+          progressWrap.hidden = !visible;
+          progressWrap.classList.toggle("upload-progress-indeterminate", Boolean(indeterminate));
+        }
+        if (progressBar && typeof percent === "number") {
+          progressBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+        }
+        if (progressPercent && typeof percent === "number") {
+          progressPercent.textContent = `${Math.round(percent)}%`;
+        }
+        if (progressStatus && status) {
+          progressStatus.textContent = status;
+        }
+        if (submitButton) {
+          submitButton.disabled = Boolean(disabled);
+          submitButton.textContent = disabled ? "正在上传..." : "上传并生成分享";
+        }
+      };
+
+      uploadForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        const fileInput = uploadForm.querySelector("[data-drop-input]");
+        if (fileInput && (!fileInput.files || fileInput.files.length === 0)) {
+          window.AppUI.notify({ message: "请先选择要上传的文件", type: "info" });
+          return;
+        }
+
+        const xhr = new XMLHttpRequest();
+        xhr.open(uploadForm.method || "POST", uploadForm.action);
+        xhr.responseType = "json";
+        xhr.setRequestHeader("Accept", "application/json");
+        xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+
+        setUploadState({
+          visible: true,
+          percent: 0,
+          status: "准备上传文件",
+          disabled: true,
+          indeterminate: false,
+        });
+
+        xhr.upload.addEventListener("progress", (progressEvent) => {
+          if (progressEvent.lengthComputable && progressEvent.total > 0) {
+            const percent = (progressEvent.loaded / progressEvent.total) * 100;
+            setUploadState({
+              visible: true,
+              percent,
+              status: percent >= 100 ? "文件已上传，正在生成分享链接" : "正在上传文件",
+              disabled: true,
+              indeterminate: false,
+            });
+            return;
+          }
+          setUploadState({
+            visible: true,
+            percent: 35,
+            status: "正在上传文件",
+            disabled: true,
+            indeterminate: true,
+          });
+        });
+
+        xhr.addEventListener("load", () => {
+          const result = xhr.response;
+          if (xhr.status >= 200 && xhr.status < 300 && result && result.ok) {
+            setUploadState({
+              visible: true,
+              percent: 100,
+              status: "上传完成，正在刷新列表",
+              disabled: true,
+              indeterminate: false,
+            });
+            window.location.assign(result.redirect || uploadForm.dataset.redirectTarget || "/admin/files");
+            return;
+          }
+
+          setUploadState({
+            visible: false,
+            percent: 0,
+            status: "准备上传文件",
+            disabled: false,
+            indeterminate: false,
+          });
+          window.AppUI.notify({
+            message: result?.message || "上传失败，请稍后重试。",
+            type: "error",
+          });
+        });
+
+        xhr.addEventListener("error", () => {
+          setUploadState({
+            visible: false,
+            percent: 0,
+            status: "准备上传文件",
+            disabled: false,
+            indeterminate: false,
+          });
+          window.AppUI.notify({ message: "上传失败，请检查网络后重试。", type: "error" });
+        });
+
+        xhr.send(new FormData(uploadForm));
+      });
+    });
+  };
+
+  const initializeDropzones = () => {
+    document.querySelectorAll("[data-dropzone]").forEach((dropzone) => {
+      const input = dropzone.querySelector("[data-drop-input]");
+      const box = dropzone.querySelector(".dropzone-box");
+      if (!input || !box) return;
+
+      box.addEventListener("click", () => {
+        input.click();
+      });
+      ["dragenter", "dragover"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.add("dropzone-active");
+        });
+      });
+      ["dragleave", "dragend", "drop"].forEach((eventName) => {
+        dropzone.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          dropzone.classList.remove("dropzone-active");
+        });
+      });
+      dropzone.addEventListener("drop", (event) => {
+        const files = event.dataTransfer?.files;
+        if (!files || files.length === 0) return;
+        input.files = files;
+        const firstFile = files[0];
+        if (firstFile) {
+          box.querySelector("strong").textContent = firstFile.name;
+          box.querySelector("p").textContent = `已选择 ${files.length} 个文件，提交后开始上传。`;
+        }
+      });
+      input.addEventListener("change", () => {
+        if (!input.files || input.files.length === 0) return;
+        const firstFile = input.files[0];
+        box.querySelector("strong").textContent = firstFile.name;
+        box.querySelector("p").textContent = `已选择 ${input.files.length} 个文件，提交后开始上传。`;
+      });
+      input.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+    });
+  };
+
+  const initializeShareMode = () => {
+    const root = document.querySelector("[data-share-mode]");
+    if (!root) return;
+
+    const triggers = Array.from(root.querySelectorAll("[data-mode-trigger]"));
+    const panels = Array.from(document.querySelectorAll("[data-mode-panel]"));
+    const updateTargets = (mode) => {
+      const url = new URL(window.location.href);
+      url.searchParams.set("mode", mode);
+      window.history.replaceState({}, "", url.toString());
+
+      document.querySelectorAll('input[name="mode"]').forEach((input) => {
+        input.value = mode;
+      });
+      document.querySelectorAll('input[name="redirect_to"]').forEach((input) => {
+        if (input.form?.action?.includes("/admin/upload") || input.form?.action?.includes("/admin/text") || input.form?.action?.includes("/admin/items/")) {
+          input.value = `${url.pathname}${url.search}`;
+        }
+      });
+    };
+
+    const activate = (mode) => {
+      triggers.forEach((trigger) => {
+        trigger.classList.toggle("is-active", trigger.dataset.modeTrigger === mode);
+      });
+      panels.forEach((panel) => {
+        panel.classList.toggle("subpanel-hidden", panel.dataset.modePanel !== mode);
+      });
+      updateTargets(mode);
+      window.localStorage.setItem("share_nest_mode", mode);
+    };
+
+    triggers.forEach((trigger) => {
+      trigger.addEventListener("click", () => activate(trigger.dataset.modeTrigger || "file"));
+    });
+
+    const remembered = window.localStorage.getItem("share_nest_mode");
+    const initialMode = new URL(window.location.href).searchParams.get("mode") || remembered || "file";
+    activate(initialMode);
+  };
+
   window.AppUI = {
     notify,
     copyText,
@@ -319,6 +609,17 @@
   document.addEventListener("DOMContentLoaded", () => {
     notifyFromDataset(document.body);
     hydrateQRCodeImages(document);
+    bindCopyButtons();
+    initializePasswordButtons();
+    initializeBatchSelection();
+    initializeUploadForms();
+    initializeDropzones();
+    initializeShareMode();
+
+    const modal = document.getElementById("shareModal");
+    if (modal) {
+      bindShareModal(modal);
+    }
 
     document.addEventListener("click", (event) => {
       const trigger = event.target.closest("[data-open-qr]");

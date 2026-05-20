@@ -67,7 +67,8 @@ a:hover {
 
 button,
 input,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -209,6 +210,167 @@ textarea {
 .panel {
   padding: var(--space-6);
   min-width: 0;
+}
+
+.topbar-admin {
+  align-items: flex-start;
+}
+
+.topbar-copy {
+  min-width: 0;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.admin-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.admin-nav-link:hover {
+  background: var(--bg-subtle);
+}
+
+.admin-nav-link-active,
+.mode-switch .is-active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #fff;
+}
+
+.admin-grid {
+  align-items: start;
+}
+
+.stats-grid,
+.list-stack,
+.filter-grid,
+.filter-actions,
+.create-share-grid,
+.mode-switch {
+  min-width: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.stat-card,
+.subpanel,
+.mini-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #fff;
+}
+
+.stat-card {
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.stat-card-label {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.stat-card strong {
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+}
+
+.stat-card p {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.list-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: var(--space-4);
+}
+
+.mini-card {
+  padding: 16px;
+}
+
+.mini-card-head,
+.mini-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.mini-card-foot {
+  margin-top: 12px;
+  color: var(--text-faint);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-grid,
+.create-share-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.filter-grid {
+  grid-template-columns: minmax(0, 1.8fr) repeat(2, minmax(0, 1fr)) auto;
+  margin: var(--space-4) 0;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+}
+
+.create-share-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: var(--space-4);
+}
+
+.subpanel {
+  padding: var(--space-5);
+}
+
+.subpanel-hidden {
+  display: none;
+}
+
+.mode-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
 }
 
 .panel-wide {
@@ -396,7 +558,8 @@ label span {
 }
 
 input,
-textarea {
+textarea,
+select {
   width: 100%;
   border: 1px solid var(--line);
   background: #fff;
@@ -409,12 +572,14 @@ textarea {
 }
 
 input:hover,
-textarea:hover {
+textarea:hover,
+select:hover {
   border-color: var(--line-strong);
 }
 
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   outline: none;
   border-color: rgba(62, 99, 221, 0.62);
   box-shadow: 0 0 0 4px rgba(62, 99, 221, 0.14);
@@ -1341,8 +1506,18 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
+  .stats-grid,
+  .create-share-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .list-toolbar,
   .topbar,
+  .topbar-actions,
   .share-header,
   .panel-head,
   .batch-toolbar {
@@ -1420,9 +1595,36 @@ tbody tr:hover {
     padding: var(--space-6) var(--space-4) var(--space-2);
   }
 
+  .admin-nav {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .admin-nav-link {
+    white-space: nowrap;
+  }
+
   .dashboard-grid {
     padding: var(--space-4) var(--space-4) var(--space-7);
     gap: var(--space-4);
+  }
+
+  .stats-grid,
+  .filter-grid,
+  .create-share-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .subpanel {
+    padding: 16px;
+  }
+
+  .mini-card-head,
+  .mini-card-foot,
+  .filter-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .panel,

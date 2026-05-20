@@ -18,6 +18,9 @@
 - 分享密码、随机密码、带密码 URL 直达
 - 分享页、后台资源列表、创建成功卡片统一支持二维码分享
 - 分享过期时间、下载次数限制
+- 仪表盘、文件、分享、配置分栏管理
+- 资源搜索、下载记录、下载次数统计
+- 固定过期选项与后台系统配置
 - 访问日志
 - 拖拽上传
 - 上传进度提示
@@ -73,18 +76,24 @@ $env:FILESERVICE_BASE_URL="http://127.0.0.1:8080"
 $env:FILESERVICE_ADMIN_USER="admin"
 $env:FILESERVICE_ADMIN_PASS="admin123"
 $env:FILESERVICE_SESSION_SECRET="replace-with-random-secret"
-$env:FILESERVICE_MAX_UPLOAD_SIZE="67108864"
-$env:FILESERVICE_PREVIEW_LIMIT="1048576"
-$env:FILESERVICE_PAGE_SIZE="10"
-$env:FILESERVICE_ACCESS_LOG_RETENTION="5000"
 ```
+
+说明：
+
+- 上传大小、预览限制、分页大小、访问日志保留条数、默认过期选项等业务配置，首次启动后会写入 SQLite 默认值。
+- 后续请在后台 `配置` 页面直接修改，不再依赖环境变量。
+- 环境变量主要保留部署与安全相关配置，例如监听地址、数据目录、管理员账号、会话密钥等。
 
 如果未显式配置 `FILESERVICE_SESSION_SECRET`，程序会在 `data/session_secret` 自动生成并持久化一个随机 secret。公网部署建议显式配置，避免迁移或多实例部署时会话不一致。
 
 ## 默认地址
 
 - 登录页：`/login`
-- 管理后台：`/admin`
+- 管理后台入口：`/admin`
+- 仪表盘：`/admin/dashboard`
+- 文件页：`/admin/files`
+- 分享页：`/admin/shares`
+- 配置页：`/admin/settings`
 
 ## 目录说明
 

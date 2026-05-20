@@ -11,19 +11,35 @@ import (
 )
 
 type Config struct {
-	Addr          string
-	DataDir       string
-	DBPath        string
-	BaseURL       string
-	SiteName      string
-	AdminUser     string
-	AdminPass     string
-	SessionSecret string
-	MaxUploadSize int64
-	PreviewLimit  int64
-	PageSize      int
-	AccessLogRetention int
+	Addr                 string
+	DataDir              string
+	DBPath               string
+	BaseURL              string
+	SiteName             string
+	AdminUser            string
+	AdminPass            string
+	SessionSecret        string
+	DefaultMaxUploadSize int64
+	DefaultPreviewLimit  int64
+	DefaultPageSize      int
+	AccessLogRetention   int
 }
+
+type RuntimeSettings struct {
+	MaxUploadSize       int64
+	PreviewLimit        int64
+	PageSize            int
+	AccessLogRetention  int
+	DefaultExpireOption string
+}
+
+const (
+	DefaultMaxUploadSize      int64 = 64 << 20
+	DefaultPreviewLimit       int64 = 1 << 20
+	DefaultPageSize                 = 10
+	DefaultAccessLogRetention       = 5000
+	DefaultExpireOption             = "7d"
+)
 
 func Load() (Config, error) {
 	loadDotEnv(".env")
@@ -36,19 +52,29 @@ func Load() (Config, error) {
 	}
 
 	return Config{
-		Addr:          getEnv("FILESERVICE_ADDR", ":8080"),
-		DataDir:       dataDir,
-		DBPath:        dbPath,
-		BaseURL:       strings.TrimRight(getEnv("FILESERVICE_BASE_URL", ""), "/"),
-		SiteName:      getEnv("FILESERVICE_SITE_NAME", "ShareNest"),
-		AdminUser:     getEnv("FILESERVICE_ADMIN_USER", "admin"),
-		AdminPass:     getEnv("FILESERVICE_ADMIN_PASS", "admin123"),
-		SessionSecret: sessionSecret,
-		MaxUploadSize: getEnvInt64("FILESERVICE_MAX_UPLOAD_SIZE", 64<<20),
-		PreviewLimit:  getEnvInt64("FILESERVICE_PREVIEW_LIMIT", 1<<20),
-		PageSize:      getEnvInt("FILESERVICE_PAGE_SIZE", 10),
-		AccessLogRetention: getEnvInt("FILESERVICE_ACCESS_LOG_RETENTION", 5000),
+		Addr:                 getEnv("FILESERVICE_ADDR", ":8080"),
+		DataDir:              dataDir,
+		DBPath:               dbPath,
+		BaseURL:              strings.TrimRight(getEnv("FILESERVICE_BASE_URL", ""), "/"),
+		SiteName:             getEnv("FILESERVICE_SITE_NAME", "ShareNest"),
+		AdminUser:            getEnv("FILESERVICE_ADMIN_USER", "admin"),
+		AdminPass:            getEnv("FILESERVICE_ADMIN_PASS", "admin123"),
+		SessionSecret:        sessionSecret,
+		DefaultMaxUploadSize: DefaultMaxUploadSize,
+		DefaultPreviewLimit:  DefaultPreviewLimit,
+		DefaultPageSize:      DefaultPageSize,
+		AccessLogRetention:   DefaultAccessLogRetention,
 	}, nil
+}
+
+func DefaultRuntimeConfig() RuntimeSettings {
+	return RuntimeSettings{
+		MaxUploadSize:       DefaultMaxUploadSize,
+		PreviewLimit:        DefaultPreviewLimit,
+		PageSize:            DefaultPageSize,
+		AccessLogRetention:  DefaultAccessLogRetention,
+		DefaultExpireOption: DefaultExpireOption,
+	}
 }
 
 func getEnv(key, fallback string) string {

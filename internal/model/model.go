@@ -29,9 +29,9 @@ type ItemSummary struct {
 
 type SharedItem struct {
 	Item
-	ShareCode     string
-	AccessToken   string
-	SharePassword string
+	ShareCode      string
+	AccessToken    string
+	SharePassword  string
 	ShareExpiresAt *time.Time
 	MaxDownloads   int
 	DownloadCount  int
@@ -41,6 +41,7 @@ type SharedItem struct {
 
 type AccessLog struct {
 	ID        int64
+	ItemID    int64
 	ShareCode string
 	ItemName  string
 	EventType string
@@ -49,4 +50,36 @@ type AccessLog struct {
 	ClientIP  string
 	UserAgent string
 	CreatedAt time.Time
+}
+
+type ItemQuery struct {
+	Keyword string
+	Kind    string
+	Status  string
+	Offset  int
+	Limit   int
+}
+
+type ShareQuery struct {
+	Keyword string
+	Status  string
+	Offset  int
+	Limit   int
+}
+
+type DashboardStats struct {
+	TotalItems     int
+	FileItems      int
+	TextItems      int
+	TotalShares    int
+	ActiveShares   int
+	ExpiredShares  int
+	TotalDownloads int
+	TodayDownloads int
+}
+
+type SystemSetting struct {
+	Key       string
+	Value     string
+	UpdatedAt time.Time
 }

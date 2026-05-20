@@ -145,6 +145,10 @@ func New(cfg config.Config, repo *repo.SQLiteRepo, fileStorage *storage.Local) (
 		mux:       http.NewServeMux(),
 	}
 
+	if err := s.ensureRuntimeSettingsDefaults(context.Background()); err != nil {
+		return nil, err
+	}
+
 	s.routes(http.FS(staticFS))
 	return s, nil
 }
@@ -162,7 +166,12 @@ func (s *Server) routes(staticFS http.FileSystem) {
 	s.mux.HandleFunc("GET /login", s.handleLoginPage)
 	s.mux.HandleFunc("POST /login", s.handleLogin)
 	s.mux.HandleFunc("POST /logout", s.handleLogout)
-	s.mux.HandleFunc("GET /admin", s.requireAdmin(s.handleDashboard))
+	s.mux.HandleFunc("GET /admin", s.requireAdmin(s.handleAdminRoot))
+	s.mux.HandleFunc("GET /admin/dashboard", s.requireAdmin(s.handleAdminDashboard))
+	s.mux.HandleFunc("GET /admin/files", s.requireAdmin(s.handleAdminFiles))
+	s.mux.HandleFunc("GET /admin/shares", s.requireAdmin(s.handleAdminShares))
+	s.mux.HandleFunc("GET /admin/settings", s.requireAdmin(s.handleAdminSettings))
+	s.mux.HandleFunc("POST /admin/settings", s.requireAdmin(s.handleUpdateSettings))
 	s.mux.HandleFunc("POST /admin/upload", s.requireAdmin(s.handleUpload))
 	s.mux.HandleFunc("POST /admin/text", s.requireAdmin(s.handleCreateText))
 	s.mux.HandleFunc("POST /admin/items/{id}/delete", s.requireAdmin(s.handleDeleteItem))
@@ -175,7 +184,7 @@ func (s *Server) routes(staticFS http.FileSystem) {
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 	if s.isAdminAuthed(r) {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		http.Redirect(w, r, "/admin/dashboard", http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -183,7 +192,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	if s.isAdminAuthed(r) {
-		http.Redirect(w, r, "/admin", http.StatusSeeOther)
+		http.Redirect(w, r, "/admin/dashboard", http.StatusSeeOther)
 		return
 	}
 	s.render(w, "login", map[string]any{
@@ -213,7 +222,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 		Secure:   s.isHTTPSRequest(r),
 	})
-	http.Redirect(w, r, "/admin", http.StatusSeeOther)
+	http.Redirect(w, r, "/admin/dashboard", http.StatusSeeOther)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -230,68 +239,26 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	currentPage := parsePositiveInt(r.URL.Query().Get("page"), 1)
-	pageSize := s.cfg.PageSize
-	offset := (currentPage - 1) * pageSize
-
-	items, totalCount, err := s.repo.ListItemsPage(r.Context(), offset, pageSize)
-	if err != nil {
-		http.Error(w, "加载资源列表失败", http.StatusInternalServerError)
-		return
-	}
-
-	totalPages := maxInt(1, (totalCount+pageSize-1)/pageSize)
-	if totalCount == 0 {
-		totalPages = 1
-	}
-	if currentPage > totalPages {
-		currentPage = totalPages
-		offset = (currentPage - 1) * pageSize
-		items, totalCount, err = s.repo.ListItemsPage(r.Context(), offset, pageSize)
-		if err != nil {
-			http.Error(w, "加载资源列表失败", http.StatusInternalServerError)
-			return
-		}
-	}
-
-	flash := s.readFlash(w, r)
-	logs, err := s.repo.ListRecentAccessLogs(r.Context(), 20)
-	if err != nil {
-		http.Error(w, "加载访问日志失败", http.StatusInternalServerError)
-		return
-	}
-	data := dashboardData{
-		SiteName:      s.cfg.SiteName,
-		BaseURL:       s.baseURL(r),
-		Items:         items,
-		AccessLogs:    logs,
-		Message:       flash.Message,
-		Flash:         flash,
-		EnvPath:       ".env",
-		EnvExample:    s.envExample(),
-		MaxUploadSize: s.cfg.MaxUploadSize,
-		CurrentPage:   currentPage,
-		TotalPages:    totalPages,
-		TotalCount:    totalCount,
-		PageSize:      pageSize,
-		PrevPage:      maxInt(1, currentPage-1),
-		NextPage:      minInt(totalPages, currentPage+1),
-		PageNumbers:   visiblePages(currentPage, totalPages, 5),
-	}
-	s.render(w, "dashboard", data, http.StatusOK)
+	http.Redirect(w, r, "/admin/dashboard", http.StatusSeeOther)
 }
 
 func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxUploadSize)
-	reader, err := r.MultipartReader()
+	settings, err := s.loadRuntimeSettings(r.Context())
 	if err != nil {
-		s.respondAdminAction(w, r, 1, http.StatusBadRequest, flashData{Message: "上传文件失败：文件过大或表单格式错误"}, false)
+		http.Error(w, "加载系统配置失败", http.StatusInternalServerError)
 		return
 	}
 
-	currentPage := 1
+	r.Body = http.MaxBytesReader(w, r.Body, settings.MaxUploadSize)
+	reader, err := r.MultipartReader()
+	if err != nil {
+		s.respondAdminActionToTarget(w, r, adminFilesTarget(r), http.StatusBadRequest, flashData{Message: "上传文件失败：文件过大或表单格式错误"}, false)
+		return
+	}
+
+	redirectTarget := adminFilesTarget(r)
 	sharePassword := ""
-	expiresAtValue := ""
+	expireOptionValue := settings.DefaultExpireOption
 	maxDownloadsValue := ""
 	var fileName string
 	var path string
@@ -309,7 +276,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			if path != "" {
 				_ = s.storage.Remove(path)
 			}
-			s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：表单读取异常"}, false)
+			s.respondAdminActionToTarget(w, r, redirectTarget, http.StatusBadRequest, flashData{Message: "上传文件失败：表单读取异常"}, false)
 			return
 		}
 
@@ -317,12 +284,12 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			defer part.Close()
 
 			switch part.FormName() {
-			case "page":
-				currentPage = parsePositiveInt(readMultipartValue(part, 32), 1)
+			case "redirect_to":
+				redirectTarget = sanitizeAdminTarget(readMultipartValue(part, 256), adminFilesTarget(r))
 			case "share_password":
 				sharePassword = strings.TrimSpace(readMultipartValue(part, 1024))
-			case "expires_at":
-				expiresAtValue = readMultipartValue(part, 64)
+			case "expire_option":
+				expireOptionValue = readMultipartValue(part, 64)
 			case "max_downloads":
 				maxDownloadsValue = readMultipartValue(part, 32)
 			case "file":
@@ -340,33 +307,33 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			if path != "" {
 				_ = s.storage.Remove(path)
 			}
-			s.respondAdminAction(w, r, currentPage, http.StatusInternalServerError, flashData{Message: "上传文件失败：无法保存文件"}, false)
+			s.respondAdminActionToTarget(w, r, redirectTarget, http.StatusInternalServerError, flashData{Message: "上传文件失败：无法保存文件"}, false)
 			return
 		}
 	}
 
 	if !fileChosen {
 		slog.Warn("上传被取消或未选择文件", "请求ID", requestIDFromContext(r))
-		s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：未选择文件"}, false)
+		s.respondAdminActionToTarget(w, r, redirectTarget, http.StatusBadRequest, flashData{Message: "上传文件失败：未选择文件"}, false)
 		return
 	}
 
 	passwordHash, err := s.hashOptionalPassword(sharePassword)
 	if err != nil {
 		_ = s.storage.Remove(path)
-		s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：密码处理异常"}, false)
+		s.respondAdminActionToTarget(w, r, redirectTarget, http.StatusBadRequest, flashData{Message: "上传文件失败：密码处理异常"}, false)
 		return
 	}
-	expiresAt, err := parseOptionalDateTimeLocal(expiresAtValue)
+	expiresAt, err := resolveExpireOption(expireOptionValue)
 	if err != nil {
 		_ = s.storage.Remove(path)
-		s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：过期时间格式错误"}, false)
+		s.respondAdminActionToTarget(w, r, redirectTarget, http.StatusBadRequest, flashData{Message: "上传文件失败：过期时间配置错误"}, false)
 		return
 	}
 	maxDownloads, err := parseNonNegativeInt(maxDownloadsValue)
 	if err != nil {
 		_ = s.storage.Remove(path)
-		s.respondAdminAction(w, r, currentPage, http.StatusBadRequest, flashData{Message: "上传文件失败：下载次数限制格式错误"}, false)
+		s.respondAdminActionToTarget(w, r, redirectTarget, http.StatusBadRequest, flashData{Message: "上传文件失败：下载次数限制格式错误"}, false)
 		return
 	}
 
@@ -387,7 +354,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 			"文件名", fileName,
 			"错误", err,
 		)
-		s.respondAdminAction(w, r, currentPage, http.StatusInternalServerError, flashData{Message: "上传文件失败：数据库写入异常"}, false)
+		s.respondAdminActionToTarget(w, r, redirectTarget, http.StatusInternalServerError, flashData{Message: "上传文件失败：数据库写入异常"}, false)
 		return
 	}
 	slog.Info("文件上传成功",
@@ -399,36 +366,48 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		"下载限制", maxDownloads,
 	)
 
-	s.respondAdminAction(w, r, currentPage, http.StatusOK, s.buildSuccessFlash(r, summary, sharePassword, "文件已上传并生成分享链接"), true)
+	s.respondAdminActionToTarget(w, r, redirectTarget, http.StatusOK, s.buildSuccessFlash(r, summary, sharePassword, "文件已上传并生成分享链接"), true)
 }
 
 func (s *Server) handleCreateText(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：表单格式错误"})
+		s.redirectAdminTarget(w, r, adminFilesTarget(r), flashData{Message: "创建文本失败：表单格式错误"})
 		return
 	}
+
+	settings, err := s.loadRuntimeSettings(r.Context())
+	if err != nil {
+		http.Error(w, "加载系统配置失败", http.StatusInternalServerError)
+		return
+	}
+
+	redirectTarget := sanitizeAdminTarget(r.FormValue("redirect_to"), adminFilesTarget(r))
 
 	name := strings.TrimSpace(r.FormValue("name"))
 	content := r.FormValue("content")
 	if name == "" || strings.TrimSpace(content) == "" {
-		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：标题和内容不能为空"})
+		s.redirectAdminTarget(w, r, redirectTarget, flashData{Message: "创建文本失败：标题和内容不能为空"})
 		return
 	}
 
 	sharePassword := strings.TrimSpace(r.FormValue("share_password"))
 	passwordHash, err := s.hashOptionalPassword(sharePassword)
 	if err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：密码处理异常"})
+		s.redirectAdminTarget(w, r, redirectTarget, flashData{Message: "创建文本失败：密码处理异常"})
 		return
 	}
-	expiresAt, err := parseOptionalDateTimeLocal(r.FormValue("expires_at"))
+	expireOption := strings.TrimSpace(r.FormValue("expire_option"))
+	if expireOption == "" {
+		expireOption = settings.DefaultExpireOption
+	}
+	expiresAt, err := resolveExpireOption(expireOption)
 	if err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：过期时间格式错误"})
+		s.redirectAdminTarget(w, r, redirectTarget, flashData{Message: "创建文本失败：过期时间配置错误"})
 		return
 	}
 	maxDownloads, err := parseNonNegativeInt(r.FormValue("max_downloads"))
 	if err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：下载次数限制格式错误"})
+		s.redirectAdminTarget(w, r, redirectTarget, flashData{Message: "创建文本失败：下载次数限制格式错误"})
 		return
 	}
 
@@ -452,7 +431,7 @@ func (s *Server) handleCreateText(w http.ResponseWriter, r *http.Request) {
 			"名称", name,
 			"错误", err,
 		)
-		s.redirectAdminMessage(w, r, flashData{Message: "创建文本失败：数据库写入异常"})
+		s.redirectAdminTarget(w, r, redirectTarget, flashData{Message: "创建文本失败：数据库写入异常"})
 		return
 	}
 	slog.Info("文本分享已创建",
@@ -464,23 +443,23 @@ func (s *Server) handleCreateText(w http.ResponseWriter, r *http.Request) {
 		"下载限制", maxDownloads,
 	)
 
-	s.redirectAdminMessage(w, r, s.buildSuccessFlash(r, summary, sharePassword, "文本已保存并生成分享链接"))
+	s.redirectAdminTarget(w, r, redirectTarget, s.buildSuccessFlash(r, summary, sharePassword, "文本已保存并生成分享链接"))
 }
 
 func (s *Server) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
 	itemID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil || itemID <= 0 {
-		s.redirectAdminMessage(w, r, flashData{Message: "删除失败：资源 ID 无效"})
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "删除失败：资源 ID 无效"})
 		return
 	}
 
 	item, err := s.repo.DeleteItem(r.Context(), itemID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			s.redirectAdminMessage(w, r, flashData{Message: "删除失败：资源不存在"})
+			s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "删除失败：资源不存在"})
 			return
 		}
-		s.redirectAdminMessage(w, r, flashData{Message: "删除失败：数据库异常"})
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "删除失败：数据库异常"})
 		return
 	}
 
@@ -493,18 +472,18 @@ func (s *Server) handleDeleteItem(w http.ResponseWriter, r *http.Request) {
 		"名称", item.Name,
 		"类型", item.Kind,
 	)
-	s.redirectAdminMessage(w, r, flashData{Message: "资源已删除"})
+	s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "资源已删除"})
 }
 
 func (s *Server) handleBatchDelete(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "批量删除失败：请求格式错误"})
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "批量删除失败：请求格式错误"})
 		return
 	}
 
 	rawIDs := r.Form["item_ids"]
 	if len(rawIDs) == 0 {
-		s.redirectAdminMessage(w, r, flashData{Message: "批量删除失败：未选择任何资源"})
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "批量删除失败：未选择任何资源"})
 		return
 	}
 
@@ -523,13 +502,13 @@ func (s *Server) handleBatchDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(itemIDs) == 0 {
-		s.redirectAdminMessage(w, r, flashData{Message: "批量删除失败：资源 ID 无效"})
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "批量删除失败：资源 ID 无效"})
 		return
 	}
 
 	items, err := s.repo.DeleteItems(r.Context(), itemIDs)
 	if err != nil {
-		s.redirectAdminMessage(w, r, flashData{Message: "批量删除失败：数据库异常"})
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "批量删除失败：数据库异常"})
 		return
 	}
 
@@ -543,7 +522,7 @@ func (s *Server) handleBatchDelete(w http.ResponseWriter, r *http.Request) {
 		"数量", len(items),
 	)
 
-	s.redirectAdminMessage(w, r, flashData{Message: fmt.Sprintf("已批量删除 %d 个资源", len(items))})
+	s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: fmt.Sprintf("已批量删除 %d 个资源", len(items))})
 }
 
 func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
@@ -760,7 +739,7 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 	if mode == preview.ModeText {
 		var err error
 		var textPreview string
-		textPreview, truncated, err = s.loadTextPreview(item)
+		textPreview, truncated, err = s.loadTextPreview(r.Context(), item)
 		if err != nil {
 			errText = "加载预览内容失败"
 		} else if isMarkdown {
@@ -799,7 +778,7 @@ func (s *Server) renderShareContent(w http.ResponseWriter, r *http.Request, item
 		IsMarkdown:        isMarkdown,
 		CodeLanguageLabel: preview.LanguageLabel(codeLanguage),
 		Truncated:         truncated,
-		PreviewLimit:      s.cfg.PreviewLimit,
+		PreviewLimit:      s.previewLimitForRequest(r.Context()),
 		RawURL:            "/s/" + item.ShareCode + "/raw",
 		DownloadURL:       "/s/" + item.ShareCode + "/download",
 	}
@@ -816,7 +795,7 @@ func (s *Server) renderShareLocked(w http.ResponseWriter, item model.SharedItem,
 		NoDownloads:   false,
 		CanCopyText:   false,
 		DownloadsLeft: s.downloadsLeft(item),
-		PreviewLimit:  s.cfg.PreviewLimit,
+		PreviewLimit:  s.previewLimitForRequest(context.Background()),
 	}
 	s.render(w, "share", data, http.StatusOK)
 }
@@ -830,7 +809,7 @@ func (s *Server) renderShareBlocked(w http.ResponseWriter, item model.SharedItem
 		NoDownloads:   noDownloads,
 		CanCopyText:   false,
 		DownloadsLeft: s.downloadsLeft(item),
-		PreviewLimit:  s.cfg.PreviewLimit,
+		PreviewLimit:  s.previewLimitForRequest(context.Background()),
 	}
 	s.render(w, "share", data, http.StatusOK)
 }
@@ -860,15 +839,16 @@ func (s *Server) loadShare(r *http.Request) (model.SharedItem, error) {
 	return item, nil
 }
 
-func (s *Server) loadTextPreview(item model.SharedItem) (string, bool, error) {
+func (s *Server) loadTextPreview(ctx context.Context, item model.SharedItem) (string, bool, error) {
+	previewLimit := s.previewLimitForRequest(ctx)
 	if item.Kind == "text" {
 		data := []byte(item.ContentText)
-		if int64(len(data)) > s.cfg.PreviewLimit {
-			return string(data[:s.cfg.PreviewLimit]), true, nil
+		if int64(len(data)) > previewLimit {
+			return string(data[:previewLimit]), true, nil
 		}
 		return item.ContentText, false, nil
 	}
-	return s.storage.ReadText(item.StoragePath, s.cfg.PreviewLimit)
+	return s.storage.ReadText(item.StoragePath, previewLimit)
 }
 
 func (s *Server) loadArchivePreview(item model.SharedItem) (*preview.ArchiveSummary, error) {
@@ -1194,10 +1174,11 @@ func (s *Server) envExample() string {
 		"FILESERVICE_ADMIN_USER=" + s.cfg.AdminUser,
 		"FILESERVICE_ADMIN_PASS=change-me",
 		"FILESERVICE_SESSION_SECRET=change-me",
-		"FILESERVICE_MAX_UPLOAD_SIZE=" + strconv.FormatInt(s.cfg.MaxUploadSize, 10),
-		"FILESERVICE_PREVIEW_LIMIT=" + strconv.FormatInt(s.cfg.PreviewLimit, 10),
-		"FILESERVICE_PAGE_SIZE=" + strconv.Itoa(s.cfg.PageSize),
-		"FILESERVICE_ACCESS_LOG_RETENTION=" + strconv.Itoa(s.cfg.AccessLogRetention),
+		"# 业务配置改为后台系统配置页管理，以下值为内置默认值",
+		"FILESERVICE_DEFAULT_MAX_UPLOAD_SIZE=" + strconv.FormatInt(s.cfg.DefaultMaxUploadSize, 10),
+		"FILESERVICE_DEFAULT_PREVIEW_LIMIT=" + strconv.FormatInt(s.cfg.DefaultPreviewLimit, 10),
+		"FILESERVICE_DEFAULT_PAGE_SIZE=" + strconv.Itoa(s.cfg.DefaultPageSize),
+		"FILESERVICE_DEFAULT_ACCESS_LOG_RETENTION=" + strconv.Itoa(s.cfg.AccessLogRetention),
 	}, "\n")
 }
 
@@ -1345,7 +1326,16 @@ func maxInt(a, b int) int {
 }
 
 func (s *Server) logAccess(r *http.Request, item model.SharedItem, eventType, status, message string) {
+	settings, settingsErr := s.loadRuntimeSettings(r.Context())
+	if settingsErr != nil {
+		slog.Error("加载运行时配置失败",
+			"请求ID", requestIDFromContext(r),
+			"错误", settingsErr,
+		)
+	}
+
 	if err := s.repo.CreateAccessLog(r.Context(), model.AccessLog{
+		ItemID:    item.ID,
 		ShareCode: item.ShareCode,
 		ItemName:  item.Name,
 		EventType: eventType,
@@ -1353,7 +1343,7 @@ func (s *Server) logAccess(r *http.Request, item model.SharedItem, eventType, st
 		Message:   message,
 		ClientIP:  clientIP(r),
 		UserAgent: firstNonEmpty(strings.TrimSpace(r.UserAgent()), "-"),
-	}); err != nil {
+	}, settings.AccessLogRetention); err != nil {
 		slog.Error("写入访问日志失败",
 			"请求ID", requestIDFromContext(r),
 			"分享码", item.ShareCode,
