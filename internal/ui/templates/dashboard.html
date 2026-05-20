@@ -324,75 +324,68 @@
       {{if not .Files.Items}}
       <div class="empty-state">还没有匹配的资源，先上传一个文件或创建一段文本。</div>
       {{else}}
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th><input type="checkbox" id="selectAllItems"></th>
-              <th>名称</th>
-              <th>类型</th>
-              <th>大小</th>
-              <th>分享</th>
-              <th>过期</th>
-              <th>下载</th>
-              <th>创建时间</th>
-              <th>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{range .Files.Items}}
-            <tr>
-              <td data-label="选择">
-                <input type="checkbox" name="item_ids" value="{{.ID}}" form="batchDeleteForm" class="item-checkbox" data-copy-value="{{if .PasswordURL}}{{.PasswordURL}}{{else}}{{.ShareURL}}{{end}}">
-              </td>
-              <td data-label="名称">
-                <div class="item-name">{{.Name}}</div>
-                <div class="item-meta">
-                  <span class="status-tag {{.VisibilityClass}}">{{.VisibilityLabel}}</span>
-                  {{if .Ext}}<span class="status-tag status-tag-plain">.{{.Ext}}</span>{{end}}
-                </div>
-              </td>
-              <td data-label="类型"><span class="type-badge">{{.Kind}}</span></td>
-              <td data-label="大小">{{humanSize .Size}}</td>
-              <td class="share-link-cell" data-label="分享">
-                <div class="share-stack">
-                  <div class="share-block">
-                    <span class="share-label">普通链接</span>
-                    <code>{{.ShareURL}}</code>
-                    <div class="button-row">
-                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.ShareURL}}" data-copy-message="已复制普通分享链接">复制普通链接</button>
-                      <button type="button" class="ghost-btn compact-btn" data-open-qr data-qr-value="{{.ShareURL}}" data-qr-title="扫码打开分享" data-qr-description="使用手机扫码即可打开当前分享链接。" data-qr-label="普通分享链接">二维码</button>
-                    </div>
-                  </div>
-                  {{if .PasswordURL}}
-                  <div class="share-block">
-                    <span class="share-label">带密码链接</span>
-                    <code>{{.PasswordURL}}</code>
-                    <div class="button-row">
-                      <button type="button" class="ghost-btn compact-btn js-copy" data-copy-value="{{.PasswordURL}}" data-copy-message="已复制带密码分享链接">复制带密码链接</button>
-                    </div>
-                  </div>
-                  {{end}}
-                </div>
-              </td>
-              <td data-label="过期">
-                <div class="share-block">
-                  <span class="status-chip">{{.ExpiryLabel}}</span>
-                  <span class="status-tag {{.ShareStatusClass}}">{{.ShareStatusLabel}}</span>
-                </div>
-              </td>
-              <td data-label="下载">{{.DownloadsLabel}}</td>
-              <td data-label="创建时间">{{formatTime .CreatedAt}}</td>
-              <td data-label="操作">
-                <form method="post" action="/admin/items/{{.ID}}/delete" onsubmit="return confirm('确认删除这个资源吗？');">
-                  <input type="hidden" name="redirect_to" value="{{$.Files.CurrentURL}}">
-                  <button type="submit" class="danger-btn">删除</button>
-                </form>
-              </td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
+      <div class="resource-card-grid">
+        {{range .Files.Items}}
+        <article class="resource-card">
+          <div class="resource-card-head">
+            <label class="resource-select">
+              <input type="checkbox" name="item_ids" value="{{.ID}}" form="batchDeleteForm" class="item-checkbox" data-copy-value="{{.PrimaryCopyURL}}">
+              <span>选择</span>
+            </label>
+            <div class="item-meta">
+              <span class="type-badge">{{.Kind}}</span>
+              <span class="status-tag {{.VisibilityClass}}">{{.VisibilityLabel}}</span>
+              <span class="status-tag {{.ShareStatusClass}}">{{.ShareStatusLabel}}</span>
+              {{if .Ext}}<span class="status-tag status-tag-plain">.{{.Ext}}</span>{{end}}
+            </div>
+          </div>
+
+          <div class="resource-card-title">
+            <div class="item-name">{{.Name}}</div>
+            <p>资源本身在这里管理，分享链接和规则统一通过快捷入口操作。</p>
+          </div>
+
+          <div class="resource-metrics">
+            <div class="resource-metric">
+              <span>文件大小</span>
+              <strong>{{humanSize .Size}}</strong>
+            </div>
+            <div class="resource-metric">
+              <span>分享过期</span>
+              <strong>{{.ExpiryLabel}}</strong>
+            </div>
+            <div class="resource-metric">
+              <span>下载情况</span>
+              <strong>{{.DownloadsLabel}}</strong>
+              <em>{{.RemainingLabel}}</em>
+            </div>
+            <div class="resource-metric">
+              <span>创建时间</span>
+              <strong>{{formatTime .CreatedAt}}</strong>
+            </div>
+          </div>
+
+          <div class="resource-card-actions">
+            <a href="{{.ShareURL}}" target="_blank" rel="noreferrer" class="primary-btn compact-btn">打开分享</a>
+            <button
+              type="button"
+              class="ghost-btn compact-btn"
+              data-open-share-detail
+              data-share-name="{{.Name}}"
+              data-share-url="{{.ShareURL}}"
+              data-share-password-url="{{.PasswordURL}}"
+              data-share-direct-url="{{.DirectURL}}"
+              data-share-password="{{.SharePassword}}">
+              分享详情
+            </button>
+            <a href="{{.ManageURL}}" class="ghost-btn compact-btn">管理分享</a>
+            <form method="post" action="/admin/items/{{.ID}}/delete" onsubmit="return confirm('确认删除这个资源吗？');">
+              <input type="hidden" name="redirect_to" value="{{$.Files.CurrentURL}}">
+              <button type="submit" class="danger-btn compact-btn">删除</button>
+            </form>
+          </div>
+        </article>
+        {{end}}
       </div>
       {{end}}
 
@@ -447,62 +440,65 @@
       {{if not .Shares.Items}}
       <div class="empty-state">还没有匹配的分享记录。</div>
       {{else}}
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>资源</th>
-              <th>类型</th>
-              <th>分享码</th>
-              <th>分享方式</th>
-              <th>过期时间</th>
-              <th>下载情况</th>
-              <th>状态</th>
-              <th>编辑</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{range .Shares.Items}}
-            <tr>
-              <td data-label="资源">
-                <div class="item-name">{{.Name}}</div>
-                <div class="item-meta"><a href="{{.ShareURL}}" target="_blank" rel="noreferrer">打开分享</a></div>
-              </td>
-              <td data-label="类型"><span class="type-badge">{{.Kind}}</span></td>
-              <td data-label="分享码"><code>{{.ShareCode}}</code></td>
-              <td data-label="分享方式"><span class="status-tag {{.VisibilityClass}}">{{.VisibilityLabel}}</span></td>
-              <td data-label="过期时间">{{.ExpiryLabel}}</td>
-              <td data-label="下载情况">
-                <div class="share-stack">
-                  <span>{{.DownloadsLabel}}</span>
-                  <span class="share-note">剩余：{{.RemainingLabel}}</span>
-                </div>
-              </td>
-              <td data-label="状态"><span class="status-tag {{.ShareStatusClass}}">{{.ShareStatusLabel}}</span></td>
-              <td data-label="编辑">
-                <div class="share-edit-cell">
-                  <button
-                    type="button"
-                    class="ghost-btn compact-btn share-edit-trigger"
-                    data-open-share-editor
-                    data-share-id="{{.ID}}"
-                    data-share-name="{{.Name}}"
-                    data-share-code="{{.ShareCode}}"
-                    data-share-kind="{{.Kind}}"
-                    data-share-expire="{{.EditExpireValue}}"
-                    data-share-expire-label="{{.EditExpireLabel}}"
-                    data-share-download-policy="{{.DownloadPolicy}}"
-                    data-share-remaining-downloads="{{.RemainingDownloads}}"
-                    data-share-redirect="{{$.Shares.CurrentURL}}">
-                    编辑
-                  </button>
-                  <span class="share-note">弹窗调整过期和次数</span>
-                </div>
-              </td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
+      <div class="share-card-grid">
+        {{range .Shares.Items}}
+        <article class="share-card">
+          <div class="share-card-head">
+            <div>
+              <div class="item-name">{{.Name}}</div>
+              <div class="item-meta">
+                <span class="type-badge">{{.Kind}}</span>
+                <span class="status-tag status-tag-plain">{{.ShareCode}}</span>
+                <span class="status-tag {{.VisibilityClass}}">{{.VisibilityLabel}}</span>
+                <span class="status-tag {{.ShareStatusClass}}">{{.ShareStatusLabel}}</span>
+              </div>
+            </div>
+            <a href="{{.ShareURL}}" target="_blank" rel="noreferrer" class="ghost-btn compact-btn">打开</a>
+          </div>
+
+          <div class="share-card-metrics">
+            <div class="share-card-metric">
+              <span>过期时间</span>
+              <strong>{{.ExpiryLabel}}</strong>
+            </div>
+            <div class="share-card-metric">
+              <span>下载规则</span>
+              <strong>{{.DownloadsLabel}}</strong>
+              <em>{{.RemainingLabel}}</em>
+            </div>
+          </div>
+
+          <div class="share-card-actions">
+            <button
+              type="button"
+              class="ghost-btn compact-btn"
+              data-open-share-detail
+              data-share-name="{{.Name}}"
+              data-share-url="{{.ShareURL}}"
+              data-share-password-url="{{.PasswordURL}}"
+              data-share-direct-url="{{.DirectURL}}"
+              data-share-password="{{.SharePassword}}">
+              链接与二维码
+            </button>
+            <button
+              type="button"
+              class="ghost-btn compact-btn share-edit-trigger"
+              data-open-share-editor
+              data-share-id="{{.ID}}"
+              data-share-name="{{.Name}}"
+              data-share-code="{{.ShareCode}}"
+              data-share-kind="{{.Kind}}"
+              data-share-expire="{{.EditExpireValue}}"
+              data-share-expire-label="{{.EditExpireLabel}}"
+              data-share-download-policy="{{.DownloadPolicy}}"
+              data-share-remaining-downloads="{{.RemainingDownloads}}"
+              data-share-redirect="{{$.Shares.CurrentURL}}">
+              编辑策略
+            </button>
+            <button type="button" class="primary-btn compact-btn js-copy" data-copy-value="{{.PrimaryCopyURL}}" data-copy-message="已复制最适合转发的分享链接">复制链接</button>
+          </div>
+        </article>
+        {{end}}
       </div>
       {{end}}
 

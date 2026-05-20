@@ -59,6 +59,8 @@ type adminItemView struct {
 	ShareURL           string
 	PasswordURL        string
 	DirectURL          string
+	ManageURL          string
+	PrimaryCopyURL     string
 	ExpiryLabel        string
 	DownloadsLabel     string
 	RemainingLabel     string
@@ -472,9 +474,10 @@ func (s *Server) mapAdminItems(r *http.Request, items []model.ItemSummary) []adm
 		view := adminItemView{
 			ItemSummary:        item,
 			ShareURL:           baseURL + "/s/" + item.ShareCode,
+			ManageURL:          adminSharesURL(1, item.ShareCode, ""),
 			ExpiryLabel:        "永不过期",
-			DownloadsLabel:     "不限",
-			RemainingLabel:     "不限",
+			DownloadsLabel:     "不限次数",
+			RemainingLabel:     fmt.Sprintf("已下载 %d 次", item.DownloadCount),
 			VisibilityLabel:    "公开",
 			VisibilityClass:    "status-tag-soft",
 			ShareStatusLabel:   "有效",
@@ -490,27 +493,29 @@ func (s *Server) mapAdminItems(r *http.Request, items []model.ItemSummary) []adm
 			view.VisibilityClass = ""
 			if item.SharePassword != "" {
 				view.PasswordURL = view.ShareURL + "?p=" + url.QueryEscape(item.SharePassword)
+				view.PrimaryCopyURL = view.PasswordURL
 			}
 			if item.ShareAccessToken != "" {
 				view.DirectURL = view.ShareURL + "?token=" + url.QueryEscape(item.ShareAccessToken)
 			}
+		}
+		if view.PrimaryCopyURL == "" {
+			view.PrimaryCopyURL = view.ShareURL
 		}
 		if item.ShareExpiresAt != nil {
 			view.ExpiryLabel = formatTimePtr(item.ShareExpiresAt)
 		}
 		if item.MaxDownloads < 0 {
 			view.DownloadsLabel = "已禁用"
-			view.RemainingLabel = "0"
+			view.RemainingLabel = fmt.Sprintf("已下载 %d 次", item.DownloadCount)
 			view.DownloadsExhausted = true
 			downloadPolicy = "limited"
 			remainingDownloads = 0
 		} else if item.MaxDownloads > 0 {
-			view.DownloadsLabel = fmt.Sprintf("%d / %d", item.DownloadCount, item.MaxDownloads)
-			view.RemainingLabel = strconv.Itoa(maxInt(0, item.MaxDownloads-item.DownloadCount))
+			view.DownloadsLabel = fmt.Sprintf("已下载 %d / %d 次", item.DownloadCount, item.MaxDownloads)
+			view.RemainingLabel = fmt.Sprintf("剩余 %d 次", maxInt(0, item.MaxDownloads-item.DownloadCount))
 			downloadPolicy = "limited"
 			remainingDownloads = maxInt(0, item.MaxDownloads-item.DownloadCount)
-		} else {
-			view.RemainingLabel = "不限"
 		}
 		if view.IsExpired {
 			view.ShareStatusLabel = "已过期"

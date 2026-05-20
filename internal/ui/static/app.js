@@ -366,6 +366,95 @@
     remainingInput.closest("label")?.classList.toggle("disabled-field", !isLimited);
   };
 
+  const openShareDetailDialog = (trigger) => {
+    const shareURL = trigger?.dataset?.shareUrl || "";
+    if (!shareURL) return;
+
+    document.getElementById("appShareDetailDialog")?.remove();
+
+    const modal = document.createElement("div");
+    modal.className = "modal-backdrop";
+    modal.id = "appShareDetailDialog";
+
+    const card = document.createElement("section");
+    card.className = "modal-card share-detail-dialog";
+
+    const head = document.createElement("div");
+    head.className = "qr-dialog-head";
+
+    const headCopy = document.createElement("div");
+    const heading = document.createElement("h3");
+    heading.textContent = trigger.dataset.shareName || "分享详情";
+    const desc = document.createElement("p");
+    desc.textContent = "复制链接、查看二维码和密码信息都集中在这里，避免列表内重复堆叠。";
+    headCopy.append(heading, desc);
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "ghost-btn compact-btn";
+    closeButton.setAttribute("data-close-modal", "");
+    closeButton.textContent = "关闭";
+    head.append(headCopy, closeButton);
+
+    const grid = document.createElement("div");
+    grid.className = "share-detail-grid";
+
+    const createItem = (label, value, copyLabel, qrDescription, password = "") => {
+      if (!value) return null;
+      const item = document.createElement("div");
+      item.className = "share-result-item";
+
+      const title = document.createElement("span");
+      title.textContent = label;
+      const code = document.createElement("code");
+      code.textContent = value;
+
+      const actions = document.createElement("div");
+      actions.className = "button-row";
+
+      const copyButton = document.createElement("button");
+      copyButton.type = "button";
+      copyButton.className = "ghost-btn compact-btn js-copy";
+      copyButton.dataset.copyValue = value;
+      copyButton.dataset.copyMessage = copyLabel;
+      copyButton.textContent = "复制";
+
+      const qrButton = document.createElement("button");
+      qrButton.type = "button";
+      qrButton.className = "ghost-btn compact-btn";
+      qrButton.dataset.openQr = "";
+      qrButton.dataset.qrValue = value;
+      qrButton.dataset.qrTitle = "扫码分享";
+      qrButton.dataset.qrDescription = qrDescription;
+      qrButton.dataset.qrLabel = label;
+      if (password) {
+        qrButton.dataset.qrPassword = password;
+      }
+      qrButton.textContent = "二维码";
+
+      actions.append(copyButton, qrButton);
+      item.append(title, code, actions);
+      return item;
+    };
+
+    const primary = createItem("普通链接", shareURL, "已复制普通分享链接", "使用手机扫码即可打开当前分享链接。", trigger.dataset.sharePassword || "");
+    const passwordURL = createItem("带密码链接", trigger.dataset.sharePasswordUrl || "", "已复制带密码分享链接", "手机扫码后可直接打开带密码的分享链接。", trigger.dataset.sharePassword || "");
+    const directURL = createItem("快捷直达链接", trigger.dataset.shareDirectUrl || "", "已复制快捷直达链接", "手机扫码后可直接打开快捷直达链接。");
+    const passwordText = createItem("分享密码", trigger.dataset.sharePassword || "", "已复制分享密码", "");
+
+    [primary, passwordURL, directURL, passwordText].forEach((item) => {
+      if (item) {
+        grid.appendChild(item);
+      }
+    });
+
+    card.append(head, grid);
+    modal.appendChild(card);
+    document.body.appendChild(modal);
+    bindCopyButtons(modal);
+    bindClosableModal(modal);
+  };
+
   const openShareEditDialog = (trigger) => {
     if (!trigger?.dataset?.shareId) return;
 
@@ -775,6 +864,15 @@
     });
   };
 
+  const initializeShareDetail = () => {
+    document.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-open-share-detail]");
+      if (!trigger) return;
+      event.preventDefault();
+      openShareDetailDialog(trigger);
+    });
+  };
+
   window.AppUI = {
     notify,
     copyText,
@@ -795,6 +893,7 @@
     initializeDropzones();
     initializeShareMode();
     initializeShareEditor();
+    initializeShareDetail();
 
     const modal = document.getElementById("shareModal");
     if (modal) {

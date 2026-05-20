@@ -269,7 +269,14 @@ textarea {
 .filter-grid,
 .filter-actions,
 .create-share-grid,
-.mode-switch {
+.mode-switch,
+.resource-card-grid,
+.resource-metrics,
+.resource-card-actions,
+.share-card-grid,
+.share-card-metrics,
+.share-card-actions,
+.share-detail-grid {
   min-width: 0;
 }
 
@@ -373,6 +380,91 @@ textarea {
   margin-top: var(--space-4);
 }
 
+.resource-card-grid,
+.share-card-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.resource-card,
+.share-card {
+  display: grid;
+  gap: var(--space-4);
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: #fff;
+}
+
+.resource-card-head,
+.share-card-head,
+.resource-card-actions,
+.share-card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.resource-card-title p {
+  margin: 8px 0 0;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.resource-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.resource-select input {
+  width: auto;
+}
+
+.resource-metrics,
+.share-card-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.share-card-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.resource-metric,
+.share-card-metric {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--bg-subtle);
+}
+
+.resource-metric span,
+.share-card-metric span {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.resource-metric strong,
+.share-card-metric strong {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.resource-metric em,
+.share-card-metric em {
+  color: var(--text-soft);
+  font-size: 12px;
+  font-style: normal;
+}
+
 .share-edit-cell {
   display: grid;
   gap: 8px;
@@ -389,6 +481,20 @@ textarea {
   border: 1px solid rgba(199, 215, 255, 0.96);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(244, 247, 255, 0.99) 100%);
+}
+
+.share-detail-dialog {
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(199, 215, 255, 0.96);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(244, 247, 255, 0.99) 100%);
+}
+
+.share-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
 }
 
 .share-edit-form-modal {
@@ -1547,12 +1653,18 @@ tbody tr:hover {
   }
 
   .stats-grid,
-  .create-share-grid {
+  .create-share-grid,
+  .resource-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .filter-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .share-card-metrics,
+  .share-detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .list-toolbar,
@@ -1652,7 +1764,10 @@ tbody tr:hover {
 
   .stats-grid,
   .filter-grid,
-  .create-share-grid {
+  .create-share-grid,
+  .resource-metrics,
+  .share-card-metrics,
+  .share-detail-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1662,7 +1777,11 @@ tbody tr:hover {
 
   .mini-card-head,
   .mini-card-foot,
-  .filter-actions {
+  .filter-actions,
+  .resource-card-head,
+  .share-card-head,
+  .resource-card-actions,
+  .share-card-actions {
     flex-direction: column;
     align-items: stretch;
   }
