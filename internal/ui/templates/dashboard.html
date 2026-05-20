@@ -480,29 +480,23 @@
               </td>
               <td data-label="状态"><span class="status-tag {{.ShareStatusClass}}">{{.ShareStatusLabel}}</span></td>
               <td data-label="编辑">
-                <form method="post" action="/admin/shares/{{.ID}}/update" class="share-edit-form">
-                  <input type="hidden" name="redirect_to" value="{{$.Shares.CurrentURL}}">
-                  <label>
-                    <span>过期时间</span>
-                    <select name="expire_option">
-                      {{range .EditExpireOptions}}
-                      <option value="{{.Value}}" {{if .Checked}}selected{{end}}>{{.Label}}</option>
-                      {{end}}
-                    </select>
-                  </label>
-                  <label>
-                    <span>下载策略</span>
-                    <select name="download_policy">
-                      <option value="unlimited" {{if eq .DownloadPolicy "unlimited"}}selected{{end}}>不限次</option>
-                      <option value="limited" {{if eq .DownloadPolicy "limited"}}selected{{end}}>限剩余次数</option>
-                    </select>
-                  </label>
-                  <label>
-                    <span>剩余下载次数</span>
-                    <input type="number" name="remaining_downloads" min="0" value="{{.RemainingDownloads}}" placeholder="0 表示立即耗尽">
-                  </label>
-                  <button type="submit" class="ghost-btn compact-btn">保存</button>
-                </form>
+                <div class="share-edit-cell">
+                  <button
+                    type="button"
+                    class="ghost-btn compact-btn share-edit-trigger"
+                    data-open-share-editor
+                    data-share-id="{{.ID}}"
+                    data-share-name="{{.Name}}"
+                    data-share-code="{{.ShareCode}}"
+                    data-share-kind="{{.Kind}}"
+                    data-share-expire="{{.EditExpireValue}}"
+                    data-share-download-policy="{{.DownloadPolicy}}"
+                    data-share-remaining-downloads="{{.RemainingDownloads}}"
+                    data-share-redirect="{{$.Shares.CurrentURL}}">
+                    编辑
+                  </button>
+                  <span class="share-note">弹窗调整过期和次数</span>
+                </div>
               </td>
             </tr>
             {{end}}

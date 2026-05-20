@@ -332,6 +332,175 @@
     hydrateQRCodeImages(modal);
   };
 
+  const bindClosableModal = (modal) => {
+    if (!modal || modal.dataset.modalBound === "true") return;
+    modal.dataset.modalBound = "true";
+    const close = () => {
+      document.removeEventListener("keydown", onKeyDown);
+      modal.remove();
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") {
+        close();
+      }
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    modal.addEventListener("click", (event) => {
+      if (event.target === modal) {
+        close();
+      }
+    });
+    modal.querySelectorAll("[data-close-modal]").forEach((button) => {
+      button.addEventListener("click", close);
+    });
+  };
+
+  const toggleRemainingInputState = (form) => {
+    const policySelect = form.querySelector('[name="download_policy"]');
+    const remainingInput = form.querySelector('[name="remaining_downloads"]');
+    if (!policySelect || !remainingInput) return;
+
+    const isLimited = policySelect.value === "limited";
+    remainingInput.disabled = !isLimited;
+    remainingInput.closest("label")?.classList.toggle("disabled-field", !isLimited);
+  };
+
+  const openShareEditDialog = (trigger) => {
+    if (!trigger?.dataset?.shareId) return;
+
+    document.getElementById("appShareEditDialog")?.remove();
+
+    const modal = document.createElement("div");
+    modal.className = "modal-backdrop";
+    modal.id = "appShareEditDialog";
+
+    const card = document.createElement("section");
+    card.className = "modal-card share-edit-dialog";
+
+    const head = document.createElement("div");
+    head.className = "qr-dialog-head";
+
+    const headCopy = document.createElement("div");
+    const heading = document.createElement("h3");
+    heading.textContent = "编辑分享";
+    const desc = document.createElement("p");
+    desc.textContent = "在弹窗中调整过期时间和剩余下载次数，避免列表内表单占空间。";
+    headCopy.append(heading, desc);
+
+    const closeButton = document.createElement("button");
+    closeButton.type = "button";
+    closeButton.className = "ghost-btn compact-btn";
+    closeButton.setAttribute("data-close-modal", "");
+    closeButton.textContent = "关闭";
+    head.append(headCopy, closeButton);
+
+    const meta = document.createElement("div");
+    meta.className = "share-edit-meta";
+
+    const nameChip = document.createElement("span");
+    nameChip.className = "status-chip";
+    nameChip.textContent = trigger.dataset.shareName || "未命名资源";
+
+    const typeChip = document.createElement("span");
+    typeChip.className = "status-chip";
+    typeChip.textContent = (trigger.dataset.shareKind || "").toUpperCase() || "SHARE";
+
+    const codeChip = document.createElement("span");
+    codeChip.className = "status-chip";
+    codeChip.textContent = trigger.dataset.shareCode || "";
+
+    meta.append(nameChip, typeChip, codeChip);
+
+    const form = document.createElement("form");
+    form.method = "post";
+    form.action = `/admin/shares/${trigger.dataset.shareId}/update`;
+    form.className = "share-edit-form-modal";
+
+    const redirectInput = document.createElement("input");
+    redirectInput.type = "hidden";
+    redirectInput.name = "redirect_to";
+    redirectInput.value = trigger.dataset.shareRedirect || "/admin/shares";
+    form.appendChild(redirectInput);
+
+    const expireLabel = document.createElement("label");
+    const expireSpan = document.createElement("span");
+    expireSpan.textContent = "过期时间";
+    const expireSelect = document.createElement("select");
+    expireSelect.name = "expire_option";
+
+    const expireOptions = [
+      ["expired_now", "立即过期"],
+      ["7h", "7小时"],
+      ["6h", "6小时"],
+      ["24h", "24小时"],
+      ["7d", "7天"],
+      ["30d", "30天"],
+      ["365d", "365天"],
+      ["never", "永不过期"],
+    ];
+    expireOptions.forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === (trigger.dataset.shareExpire || "7d");
+      expireSelect.appendChild(option);
+    });
+    expireLabel.append(expireSpan, expireSelect);
+
+    const policyLabel = document.createElement("label");
+    const policySpan = document.createElement("span");
+    policySpan.textContent = "下载策略";
+    const policySelect = document.createElement("select");
+    policySelect.name = "download_policy";
+    [
+      ["unlimited", "不限次"],
+      ["limited", "限剩余次数"],
+    ].forEach(([value, label]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = value === (trigger.dataset.shareDownloadPolicy || "unlimited");
+      policySelect.appendChild(option);
+    });
+    policyLabel.append(policySpan, policySelect);
+
+    const remainingLabel = document.createElement("label");
+    const remainingSpan = document.createElement("span");
+    remainingSpan.textContent = "剩余下载次数";
+    const remainingInput = document.createElement("input");
+    remainingInput.type = "number";
+    remainingInput.name = "remaining_downloads";
+    remainingInput.min = "0";
+    remainingInput.placeholder = "0 表示立即耗尽";
+    remainingInput.value = trigger.dataset.shareRemainingDownloads || "0";
+    remainingLabel.append(remainingSpan, remainingInput);
+
+    const actions = document.createElement("div");
+    actions.className = "share-edit-actions";
+
+    const cancelButton = document.createElement("button");
+    cancelButton.type = "button";
+    cancelButton.className = "ghost-btn compact-btn";
+    cancelButton.setAttribute("data-close-modal", "");
+    cancelButton.textContent = "取消";
+
+    const submitButton = document.createElement("button");
+    submitButton.type = "submit";
+    submitButton.className = "primary-btn compact-btn";
+    submitButton.textContent = "保存修改";
+
+    actions.append(cancelButton, submitButton);
+    form.append(expireLabel, policyLabel, remainingLabel, actions);
+    card.append(head, meta, form);
+    modal.appendChild(card);
+    document.body.appendChild(modal);
+
+    policySelect.addEventListener("change", () => toggleRemainingInputState(form));
+    toggleRemainingInputState(form);
+    bindClosableModal(modal);
+  };
+
   const initializePasswordButtons = () => {
     document.querySelectorAll("[data-generate-password]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -596,6 +765,15 @@
     activate(initialMode);
   };
 
+  const initializeShareEditor = () => {
+    document.addEventListener("click", (event) => {
+      const trigger = event.target.closest("[data-open-share-editor]");
+      if (!trigger) return;
+      event.preventDefault();
+      openShareEditDialog(trigger);
+    });
+  };
+
   window.AppUI = {
     notify,
     copyText,
@@ -615,6 +793,7 @@
     initializeUploadForms();
     initializeDropzones();
     initializeShareMode();
+    initializeShareEditor();
 
     const modal = document.getElementById("shareModal");
     if (modal) {

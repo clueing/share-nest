@@ -69,6 +69,7 @@ type adminItemView struct {
 	IsExpired          bool
 	DownloadsExhausted bool
 	EditExpireOptions  []adminExpireOption
+	EditExpireValue    string
 	DownloadPolicy     string
 	RemainingDownloads int
 }
@@ -480,6 +481,7 @@ func (s *Server) mapAdminItems(r *http.Request, items []model.ItemSummary) []adm
 			IsExpired:          s.shareExpired(model.SharedItem{ShareExpiresAt: item.ShareExpiresAt}),
 			DownloadsExhausted: item.MaxDownloads > 0 && item.DownloadCount >= item.MaxDownloads,
 			EditExpireOptions:  shareEditExpireOptions(item.ShareExpiresAt),
+			EditExpireValue:    inferExpireOption(item.ShareExpiresAt),
 		}
 		if item.PasswordProtected {
 			view.VisibilityLabel = "密码"

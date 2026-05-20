@@ -373,14 +373,44 @@ textarea {
   margin-top: var(--space-4);
 }
 
-.share-edit-form {
+.share-edit-cell {
   display: grid;
-  gap: 10px;
-  min-width: 220px;
+  gap: 8px;
+  min-width: 0;
 }
 
-.share-edit-form button {
+.share-edit-trigger {
   width: 100%;
+}
+
+.share-edit-dialog {
+  padding: var(--space-6);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(199, 215, 255, 0.96);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.99) 0%, rgba(244, 247, 255, 0.99) 100%);
+}
+
+.share-edit-form-modal {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.share-edit-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.share-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.disabled-field {
+  opacity: 0.6;
 }
 
 .panel-wide {
