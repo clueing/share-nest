@@ -172,6 +172,7 @@ func (s *Server) routes(staticFS http.FileSystem) {
 	s.mux.HandleFunc("GET /admin/shares", s.requireAdmin(s.handleAdminShares))
 	s.mux.HandleFunc("GET /admin/settings", s.requireAdmin(s.handleAdminSettings))
 	s.mux.HandleFunc("POST /admin/settings", s.requireAdmin(s.handleUpdateSettings))
+	s.mux.HandleFunc("POST /admin/shares/{id}/update", s.requireAdmin(s.handleUpdateShare))
 	s.mux.HandleFunc("POST /admin/upload", s.requireAdmin(s.handleUpload))
 	s.mux.HandleFunc("POST /admin/text", s.requireAdmin(s.handleCreateText))
 	s.mux.HandleFunc("POST /admin/items/{id}/delete", s.requireAdmin(s.handleDeleteItem))
@@ -947,10 +948,13 @@ func (s *Server) shareExpired(item model.SharedItem) bool {
 }
 
 func (s *Server) downloadLimitReached(item model.SharedItem) bool {
-	return item.MaxDownloads > 0 && item.DownloadCount >= item.MaxDownloads
+	return item.MaxDownloads < 0 || (item.MaxDownloads > 0 && item.DownloadCount >= item.MaxDownloads)
 }
 
 func (s *Server) downloadsLeft(item model.SharedItem) int {
+	if item.MaxDownloads < 0 {
+		return 0
+	}
 	if item.MaxDownloads <= 0 {
 		return -1
 	}

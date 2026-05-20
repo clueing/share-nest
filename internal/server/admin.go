@@ -61,12 +61,16 @@ type adminItemView struct {
 	DirectURL          string
 	ExpiryLabel        string
 	DownloadsLabel     string
+	RemainingLabel     string
 	VisibilityLabel    string
 	VisibilityClass    string
 	ShareStatusLabel   string
 	ShareStatusClass   string
 	IsExpired          bool
 	DownloadsExhausted bool
+	EditExpireOptions  []adminExpireOption
+	DownloadPolicy     string
+	RemainingDownloads int
 }
 
 type adminFileSection struct {
@@ -291,6 +295,52 @@ func (s *Server) handleAdminShares(w http.ResponseWriter, r *http.Request) {
 	s.render(w, "admin", data, http.StatusOK)
 }
 
+func (s *Server) handleUpdateShare(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "更新分享失败：表单格式错误"})
+		return
+	}
+
+	itemID, err := strconv.ParseInt(strings.TrimSpace(r.PathValue("id")), 10, 64)
+	if err != nil || itemID <= 0 {
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "更新分享失败：资源 ID 无效"})
+		return
+	}
+
+	summary, err := s.repo.GetShareSummaryByItemID(r.Context(), itemID)
+	if err != nil {
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "更新分享失败：分享不存在"})
+		return
+	}
+
+	expireOption := strings.TrimSpace(r.FormValue("expire_option"))
+	expiresAt, err := resolveShareEditExpireOption(expireOption)
+	if err != nil {
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "更新分享失败：过期时间选项无效"})
+		return
+	}
+
+	downloadPolicy := strings.TrimSpace(r.FormValue("download_policy"))
+	remainingDownloads, err := parseRemainingDownloads(r.FormValue("remaining_downloads"))
+	if err != nil {
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "更新分享失败：剩余下载次数无效"})
+		return
+	}
+
+	maxDownloads, err := resolveMaxDownloadsForUpdate(summary, downloadPolicy, remainingDownloads)
+	if err != nil {
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "更新分享失败：下载策略无效"})
+		return
+	}
+
+	if err := s.repo.UpdateShareSettings(r.Context(), itemID, expiresAt, maxDownloads); err != nil {
+		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "更新分享失败：数据库异常"})
+		return
+	}
+
+	s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "分享设置已更新"})
+}
+
 func (s *Server) handleAdminSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := s.loadRuntimeSettings(r.Context())
 	if err != nil {
@@ -415,17 +465,21 @@ func (s *Server) mapAdminItems(r *http.Request, items []model.ItemSummary) []adm
 	baseURL := s.baseURL(r)
 	result := make([]adminItemView, 0, len(items))
 	for _, item := range items {
+		downloadPolicy := "unlimited"
+		remainingDownloads := 0
 		view := adminItemView{
 			ItemSummary:        item,
 			ShareURL:           baseURL + "/s/" + item.ShareCode,
 			ExpiryLabel:        "永不过期",
 			DownloadsLabel:     "不限",
+			RemainingLabel:     "不限",
 			VisibilityLabel:    "公开",
 			VisibilityClass:    "status-tag-soft",
 			ShareStatusLabel:   "有效",
 			ShareStatusClass:   "status-tag-soft",
 			IsExpired:          s.shareExpired(model.SharedItem{ShareExpiresAt: item.ShareExpiresAt}),
 			DownloadsExhausted: item.MaxDownloads > 0 && item.DownloadCount >= item.MaxDownloads,
+			EditExpireOptions:  shareEditExpireOptions(item.ShareExpiresAt),
 		}
 		if item.PasswordProtected {
 			view.VisibilityLabel = "密码"
@@ -440,8 +494,19 @@ func (s *Server) mapAdminItems(r *http.Request, items []model.ItemSummary) []adm
 		if item.ShareExpiresAt != nil {
 			view.ExpiryLabel = formatTimePtr(item.ShareExpiresAt)
 		}
-		if item.MaxDownloads > 0 {
+		if item.MaxDownloads < 0 {
+			view.DownloadsLabel = "已禁用"
+			view.RemainingLabel = "0"
+			view.DownloadsExhausted = true
+			downloadPolicy = "limited"
+			remainingDownloads = 0
+		} else if item.MaxDownloads > 0 {
 			view.DownloadsLabel = fmt.Sprintf("%d / %d", item.DownloadCount, item.MaxDownloads)
+			view.RemainingLabel = strconv.Itoa(maxInt(0, item.MaxDownloads-item.DownloadCount))
+			downloadPolicy = "limited"
+			remainingDownloads = maxInt(0, item.MaxDownloads-item.DownloadCount)
+		} else {
+			view.RemainingLabel = "不限"
 		}
 		if view.IsExpired {
 			view.ShareStatusLabel = "已过期"
@@ -450,6 +515,8 @@ func (s *Server) mapAdminItems(r *http.Request, items []model.ItemSummary) []adm
 			view.ShareStatusLabel = "下载耗尽"
 			view.ShareStatusClass = "status-tag"
 		}
+		view.DownloadPolicy = downloadPolicy
+		view.RemainingDownloads = remainingDownloads
 		result = append(result, view)
 	}
 	return result
@@ -598,6 +665,24 @@ func expireOptionsForValue(selected string) []adminExpireOption {
 	return options
 }
 
+func shareEditExpireOptions(expiresAt *time.Time) []adminExpireOption {
+	selected := inferExpireOption(expiresAt)
+	options := make([]adminExpireOption, 0, len(expireOptions)+1)
+	options = append(options, adminExpireOption{
+		Value:   "expired_now",
+		Label:   "立即过期",
+		Checked: selected == "expired_now",
+	})
+	for _, option := range expireOptions {
+		options = append(options, adminExpireOption{
+			Value:   option.Value,
+			Label:   option.Label,
+			Checked: option.Value == selected,
+		})
+	}
+	return options
+}
+
 func resolveExpireOption(value string) (*time.Time, error) {
 	value = defaultString(strings.TrimSpace(value), config.DefaultExpireOption)
 	now := time.Now()
@@ -612,6 +697,69 @@ func resolveExpireOption(value string) (*time.Time, error) {
 		return &expiresAt, nil
 	}
 	return nil, fmt.Errorf("invalid expire option")
+}
+
+func resolveShareEditExpireOption(value string) (*time.Time, error) {
+	value = strings.TrimSpace(value)
+	if value == "expired_now" {
+		expiredAt := time.Now().Add(-time.Minute)
+		return &expiredAt, nil
+	}
+	return resolveExpireOption(value)
+}
+
+func inferExpireOption(expiresAt *time.Time) string {
+	if expiresAt == nil {
+		return "never"
+	}
+	now := time.Now()
+	if expiresAt.Before(now) {
+		return "expired_now"
+	}
+
+	remaining := expiresAt.Sub(now)
+	bestValue := config.DefaultExpireOption
+	bestDiff := time.Duration(1<<63 - 1)
+	for _, option := range expireOptions {
+		if option.Value == "never" {
+			continue
+		}
+		diff := option.Duration - remaining
+		if diff < 0 {
+			diff = -diff
+		}
+		if diff < bestDiff {
+			bestDiff = diff
+			bestValue = option.Value
+		}
+	}
+	return bestValue
+}
+
+func parseRemainingDownloads(value string) (int, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < 0 {
+		return 0, fmt.Errorf("invalid remaining downloads")
+	}
+	return parsed, nil
+}
+
+func resolveMaxDownloadsForUpdate(summary model.ItemSummary, policy string, remaining int) (int, error) {
+	switch strings.TrimSpace(policy) {
+	case "", "unlimited":
+		return 0, nil
+	case "limited":
+		if remaining == 0 {
+			return -1, nil
+		}
+		return summary.DownloadCount + remaining, nil
+	default:
+		return 0, fmt.Errorf("invalid download policy")
+	}
 }
 
 func parseStoredInt64(value string, fallback int64) int64 {

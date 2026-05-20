@@ -449,6 +449,58 @@ WHERE s.share_code = ?`,
 	return item, nil
 }
 
+func (r *SQLiteRepo) GetShareSummaryByItemID(ctx context.Context, itemID int64) (model.ItemSummary, error) {
+	rows, err := r.db.QueryContext(ctx, `
+SELECT
+	i.id, i.kind, i.name, i.storage_path, i.mime_type, i.ext, i.size, i.sha256, i.created_at,
+	COALESCE(s.share_code, ''), COALESCE(s.access_token, ''), COALESCE(s.password_plain, ''), COALESCE(s.password_hash, ''),
+	COALESCE(s.expires_at, 0), COALESCE(s.max_downloads, 0), COALESCE(s.download_count, 0), COALESCE(s.enabled, 0)
+FROM shares s
+JOIN items i ON i.id = s.item_id
+WHERE i.id = ?
+LIMIT 1`, itemID)
+	if err != nil {
+		return model.ItemSummary{}, err
+	}
+	defer rows.Close()
+
+	items, err := scanItemSummaryRows(rows)
+	if err != nil {
+		return model.ItemSummary{}, err
+	}
+	if len(items) == 0 {
+		return model.ItemSummary{}, sql.ErrNoRows
+	}
+	return items[0], nil
+}
+
+func (r *SQLiteRepo) UpdateShareSettings(ctx context.Context, itemID int64, expiresAt *time.Time, maxDownloads int) error {
+	var expiresUnix int64
+	if expiresAt != nil {
+		expiresUnix = expiresAt.Unix()
+	}
+
+	res, err := r.db.ExecContext(ctx, `
+UPDATE shares
+SET expires_at = ?, max_downloads = ?
+WHERE item_id = ?`,
+		expiresUnix,
+		maxDownloads,
+		itemID,
+	)
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *SQLiteRepo) DeleteItems(ctx context.Context, itemIDs []int64) ([]model.Item, error) {
 	if len(itemIDs) == 0 {
 		return nil, nil
@@ -564,7 +616,7 @@ func (r *SQLiteRepo) IncrementDownloadCount(ctx context.Context, itemID int64) (
 		ctx,
 		`UPDATE shares
 		 SET download_count = download_count + 1
-		 WHERE item_id = ? AND (max_downloads = 0 OR download_count < max_downloads)`,
+		 WHERE item_id = ? AND max_downloads >= 0 AND (max_downloads = 0 OR download_count < max_downloads)`,
 		itemID,
 	)
 	if err != nil {
@@ -772,7 +824,7 @@ func buildItemFilters(query model.ItemQuery) (string, []any) {
 		conditions = append(conditions, `s.expires_at > 0 AND s.expires_at <= ?`)
 		args = append(args, now)
 	case "downloads_exhausted":
-		conditions = append(conditions, `s.max_downloads > 0 AND s.download_count >= s.max_downloads`)
+		conditions = append(conditions, `(s.max_downloads < 0 OR (s.max_downloads > 0 AND s.download_count >= s.max_downloads))`)
 	}
 
 	if len(conditions) == 0 {
@@ -804,7 +856,7 @@ func buildShareFilters(query model.ShareQuery) (string, []any) {
 	case "public":
 		conditions = append(conditions, `s.password_hash = ''`)
 	case "downloads_exhausted":
-		conditions = append(conditions, `s.max_downloads > 0 AND s.download_count >= s.max_downloads`)
+		conditions = append(conditions, `(s.max_downloads < 0 OR (s.max_downloads > 0 AND s.download_count >= s.max_downloads))`)
 	}
 
 	if len(conditions) == 0 {

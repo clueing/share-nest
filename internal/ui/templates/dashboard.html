@@ -458,6 +458,7 @@
               <th>过期时间</th>
               <th>下载情况</th>
               <th>状态</th>
+              <th>编辑</th>
             </tr>
           </thead>
           <tbody>
@@ -471,8 +472,38 @@
               <td data-label="分享码"><code>{{.ShareCode}}</code></td>
               <td data-label="分享方式"><span class="status-tag {{.VisibilityClass}}">{{.VisibilityLabel}}</span></td>
               <td data-label="过期时间">{{.ExpiryLabel}}</td>
-              <td data-label="下载情况">{{.DownloadsLabel}}</td>
+              <td data-label="下载情况">
+                <div class="share-stack">
+                  <span>{{.DownloadsLabel}}</span>
+                  <span class="share-note">剩余：{{.RemainingLabel}}</span>
+                </div>
+              </td>
               <td data-label="状态"><span class="status-tag {{.ShareStatusClass}}">{{.ShareStatusLabel}}</span></td>
+              <td data-label="编辑">
+                <form method="post" action="/admin/shares/{{.ID}}/update" class="share-edit-form">
+                  <input type="hidden" name="redirect_to" value="{{$.Shares.CurrentURL}}">
+                  <label>
+                    <span>过期时间</span>
+                    <select name="expire_option">
+                      {{range .EditExpireOptions}}
+                      <option value="{{.Value}}" {{if .Checked}}selected{{end}}>{{.Label}}</option>
+                      {{end}}
+                    </select>
+                  </label>
+                  <label>
+                    <span>下载策略</span>
+                    <select name="download_policy">
+                      <option value="unlimited" {{if eq .DownloadPolicy "unlimited"}}selected{{end}}>不限次</option>
+                      <option value="limited" {{if eq .DownloadPolicy "limited"}}selected{{end}}>限剩余次数</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>剩余下载次数</span>
+                    <input type="number" name="remaining_downloads" min="0" value="{{.RemainingDownloads}}" placeholder="0 表示立即耗尽">
+                  </label>
+                  <button type="submit" class="ghost-btn compact-btn">保存</button>
+                </form>
+              </td>
             </tr>
             {{end}}
           </tbody>

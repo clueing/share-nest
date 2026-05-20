@@ -373,6 +373,16 @@ textarea {
   margin-top: var(--space-4);
 }
 
+.share-edit-form {
+  display: grid;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.share-edit-form button {
+  width: 100%;
+}
+
 .panel-wide {
   grid-column: 1 / -1;
 }
