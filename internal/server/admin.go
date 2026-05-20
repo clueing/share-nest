@@ -90,12 +90,14 @@ type adminFileSection struct {
 }
 
 type adminShareSection struct {
-	Items        []adminItemView
-	Pagination   adminPagination
-	Query        string
-	Status       string
-	CurrentURL   string
-	DownloadLogs []model.AccessLog
+	Items              []adminItemView
+	Pagination         adminPagination
+	Query              string
+	Status             string
+	CurrentURL         string
+	DownloadLogs       []model.AccessLog
+	DownloadLogTitle   string
+	DownloadLogSummary string
 }
 
 type adminDashboardSection struct {
@@ -279,24 +281,56 @@ func (s *Server) handleAdminShares(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	downloadLogs, err := s.repo.ListAccessLogs(r.Context(), "download", 20)
+	shareCodes := collectShareCodes(items)
+	hasScopedFilter := query.Keyword != "" || query.Status != ""
+
+	var downloadLogs []model.AccessLog
+	if hasScopedFilter {
+		downloadLogs, err = s.repo.ListAccessLogsByShareCodes(r.Context(), "download", shareCodes, 20)
+	} else {
+		downloadLogs, err = s.repo.ListAccessLogs(r.Context(), "download", 20)
+	}
 	if err != nil {
 		http.Error(w, "加载下载记录失败", http.StatusInternalServerError)
 		return
+	}
+
+	logTitle := "最近下载记录"
+	logSummary := "展示全站最近 20 条下载事件，用于快速观察分享效果和异常情况。"
+	if hasScopedFilter {
+		logTitle = "当前列表的下载记录"
+		logSummary = "只展示当前搜索或筛选结果对应分享的最近 20 条下载事件。"
 	}
 
 	flash := s.readFlash(w, r)
 	currentURL := adminSharesURL(currentPage, query.Keyword, query.Status)
 	data := s.newAdminPageData(r, "shares", flash, settings)
 	data.Shares = adminShareSection{
-		Items:        s.mapAdminItems(r, items),
-		Pagination:   buildAdminPagination("/admin/shares", currentPage, totalPages, totalCount, pageSize, url.Values{"q": {query.Keyword}, "status": {query.Status}}),
-		Query:        query.Keyword,
-		Status:       query.Status,
-		CurrentURL:   currentURL,
-		DownloadLogs: downloadLogs,
+		Items:              s.mapAdminItems(r, items),
+		Pagination:         buildAdminPagination("/admin/shares", currentPage, totalPages, totalCount, pageSize, url.Values{"q": {query.Keyword}, "status": {query.Status}}),
+		Query:              query.Keyword,
+		Status:             query.Status,
+		CurrentURL:         currentURL,
+		DownloadLogs:       downloadLogs,
+		DownloadLogTitle:   logTitle,
+		DownloadLogSummary: logSummary,
 	}
 	s.render(w, "admin", data, http.StatusOK)
+}
+
+func collectShareCodes(items []model.ItemSummary) []string {
+	if len(items) == 0 {
+		return nil
+	}
+	shareCodes := make([]string, 0, len(items))
+	for _, item := range items {
+		code := strings.TrimSpace(item.ShareCode)
+		if code == "" {
+			continue
+		}
+		shareCodes = append(shareCodes, code)
+	}
+	return shareCodes
 }
 
 func (s *Server) handleUpdateShare(w http.ResponseWriter, r *http.Request) {

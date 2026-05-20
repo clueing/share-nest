@@ -270,12 +270,9 @@ textarea {
 .filter-actions,
 .create-share-grid,
 .mode-switch,
-.resource-card-grid,
-.resource-metrics,
-.resource-card-actions,
-.share-card-grid,
-.share-card-metrics,
-.share-card-actions,
+.admin-card-grid,
+.admin-metrics,
+.admin-card-actions,
 .share-detail-grid {
   min-width: 0;
 }
@@ -380,14 +377,12 @@ textarea {
   margin-top: var(--space-4);
 }
 
-.resource-card-grid,
-.share-card-grid {
+.admin-card-grid {
   display: grid;
   gap: var(--space-4);
 }
 
-.resource-card,
-.share-card {
+.admin-card {
   display: grid;
   gap: var(--space-4);
   padding: 18px;
@@ -396,10 +391,8 @@ textarea {
   background: #fff;
 }
 
-.resource-card-head,
-.share-card-head,
-.resource-card-actions,
-.share-card-actions {
+.admin-card-head,
+.admin-card-actions {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -407,7 +400,7 @@ textarea {
   flex-wrap: wrap;
 }
 
-.resource-card-title p {
+.admin-card-copy {
   margin: 8px 0 0;
   color: var(--text-faint);
   font-size: 13px;
@@ -425,19 +418,17 @@ textarea {
   width: auto;
 }
 
-.resource-metrics,
-.share-card-metrics {
+.admin-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-3);
 }
 
-.share-card-metrics {
+.admin-metrics-compact {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.resource-metric,
-.share-card-metric {
+.admin-metric {
   display: grid;
   gap: 6px;
   padding: 14px;
@@ -446,20 +437,17 @@ textarea {
   background: var(--bg-subtle);
 }
 
-.resource-metric span,
-.share-card-metric span {
+.admin-metric span {
   color: var(--text-faint);
   font-size: 12px;
 }
 
-.resource-metric strong,
-.share-card-metric strong {
+.admin-metric strong {
   font-size: 14px;
   line-height: 1.4;
 }
 
-.resource-metric em,
-.share-card-metric em {
+.admin-metric em {
   color: var(--text-soft);
   font-size: 12px;
   font-style: normal;
@@ -1654,7 +1642,7 @@ tbody tr:hover {
 
   .stats-grid,
   .create-share-grid,
-  .resource-metrics {
+  .admin-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -1662,7 +1650,7 @@ tbody tr:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .share-card-metrics,
+  .admin-metrics-compact,
   .share-detail-grid {
     grid-template-columns: 1fr;
   }
@@ -1765,8 +1753,8 @@ tbody tr:hover {
   .stats-grid,
   .filter-grid,
   .create-share-grid,
-  .resource-metrics,
-  .share-card-metrics,
+  .admin-metrics,
+  .admin-metrics-compact,
   .share-detail-grid {
     grid-template-columns: 1fr;
   }
@@ -1778,10 +1766,8 @@ tbody tr:hover {
   .mini-card-head,
   .mini-card-foot,
   .filter-actions,
-  .resource-card-head,
-  .share-card-head,
-  .resource-card-actions,
-  .share-card-actions {
+  .admin-card-head,
+  .admin-card-actions {
     flex-direction: column;
     align-items: stretch;
   }

@@ -324,10 +324,10 @@
       {{if not .Files.Items}}
       <div class="empty-state">还没有匹配的资源，先上传一个文件或创建一段文本。</div>
       {{else}}
-      <div class="resource-card-grid">
+      <div class="admin-card-grid">
         {{range .Files.Items}}
-        <article class="resource-card">
-          <div class="resource-card-head">
+        <article class="admin-card">
+          <div class="admin-card-head">
             <label class="resource-select">
               <input type="checkbox" name="item_ids" value="{{.ID}}" form="batchDeleteForm" class="item-checkbox" data-copy-value="{{.PrimaryCopyURL}}">
               <span>选择</span>
@@ -340,32 +340,32 @@
             </div>
           </div>
 
-          <div class="resource-card-title">
+          <div class="admin-card-title">
             <div class="item-name">{{.Name}}</div>
-            <p>资源本身在这里管理，分享链接和规则统一通过快捷入口操作。</p>
+            <p class="admin-card-copy">资源本身在这里管理，分享链接和规则统一通过快捷入口操作。</p>
           </div>
 
-          <div class="resource-metrics">
-            <div class="resource-metric">
+          <div class="admin-metrics">
+            <div class="admin-metric">
               <span>文件大小</span>
               <strong>{{humanSize .Size}}</strong>
             </div>
-            <div class="resource-metric">
+            <div class="admin-metric">
               <span>分享过期</span>
               <strong>{{.ExpiryLabel}}</strong>
             </div>
-            <div class="resource-metric">
+            <div class="admin-metric">
               <span>下载情况</span>
               <strong>{{.DownloadsLabel}}</strong>
               <em>{{.RemainingLabel}}</em>
             </div>
-            <div class="resource-metric">
+            <div class="admin-metric">
               <span>创建时间</span>
               <strong>{{formatTime .CreatedAt}}</strong>
             </div>
           </div>
 
-          <div class="resource-card-actions">
+          <div class="admin-card-actions">
             <a href="{{.ShareURL}}" target="_blank" rel="noreferrer" class="primary-btn compact-btn">打开分享</a>
             <button
               type="button"
@@ -404,7 +404,7 @@
       <div class="panel-head">
         <div>
           <h2>分享管理</h2>
-          <p>集中查看分享状态、下载次数和下载记录。</p>
+          <p>这里专门处理分享规则、访问入口和下载表现，不再混入资源创建操作。</p>
         </div>
       </div>
       <form method="get" action="/admin/shares" class="filter-grid">
@@ -431,7 +431,7 @@
 
       <div class="list-toolbar">
         <div class="list-stats">
-          <span class="stat-pill">总数量 {{.Shares.Pagination.TotalCount}}</span>
+          <span class="stat-pill">匹配分享 {{.Shares.Pagination.TotalCount}}</span>
           <span class="stat-pill">当前第 {{.Shares.Pagination.CurrentPage}} 页</span>
           <span class="stat-pill">每页 {{.Shares.Pagination.PageSize}} 条</span>
         </div>
@@ -440,10 +440,10 @@
       {{if not .Shares.Items}}
       <div class="empty-state">还没有匹配的分享记录。</div>
       {{else}}
-      <div class="share-card-grid">
+      <div class="admin-card-grid">
         {{range .Shares.Items}}
-        <article class="share-card">
-          <div class="share-card-head">
+        <article class="admin-card">
+          <div class="admin-card-head">
             <div>
               <div class="item-name">{{.Name}}</div>
               <div class="item-meta">
@@ -456,19 +456,19 @@
             <a href="{{.ShareURL}}" target="_blank" rel="noreferrer" class="ghost-btn compact-btn">打开</a>
           </div>
 
-          <div class="share-card-metrics">
-            <div class="share-card-metric">
+          <div class="admin-metrics admin-metrics-compact">
+            <div class="admin-metric">
               <span>过期时间</span>
               <strong>{{.ExpiryLabel}}</strong>
             </div>
-            <div class="share-card-metric">
+            <div class="admin-metric">
               <span>下载规则</span>
               <strong>{{.DownloadsLabel}}</strong>
               <em>{{.RemainingLabel}}</em>
             </div>
           </div>
 
-          <div class="share-card-actions">
+          <div class="admin-card-actions">
             <button
               type="button"
               class="ghost-btn compact-btn"
@@ -514,39 +514,33 @@
     <section class="panel panel-wide">
       <div class="panel-head">
         <div>
-          <h2>下载记录</h2>
-          <p>展示最近 20 条下载事件，用于观察分享效果和异常情况。</p>
+          <h2>{{.Shares.DownloadLogTitle}}</h2>
+          <p>{{.Shares.DownloadLogSummary}}</p>
         </div>
       </div>
       {{if not .Shares.DownloadLogs}}
       <div class="empty-state">还没有下载记录。</div>
       {{else}}
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>时间</th>
-              <th>资源</th>
-              <th>结果</th>
-              <th>IP</th>
-              <th>说明</th>
-            </tr>
-          </thead>
-          <tbody>
-            {{range .Shares.DownloadLogs}}
-            <tr>
-              <td data-label="时间">{{formatTime .CreatedAt}}</td>
-              <td data-label="资源">
-                <div class="item-name">{{.ItemName}}</div>
-                <div class="item-meta"><span class="status-tag status-tag-plain">{{.ShareCode}}</span></div>
-              </td>
-              <td data-label="结果"><span class="status-tag {{if eq .Status "success"}}status-tag-soft{{else if eq .Status "denied"}}status-tag{{else}}status-tag-plain{{end}}">{{.Status}}</span></td>
-              <td data-label="IP">{{.ClientIP}}</td>
-              <td data-label="说明">{{if .Message}}{{.Message}}{{else}}-{{end}}</td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
+      <div class="list-stack">
+        {{range .Shares.DownloadLogs}}
+        <article class="mini-card">
+          <div class="mini-card-head">
+            <div>
+              <div class="item-name">{{.ItemName}}</div>
+              <div class="item-meta">
+                <span class="status-tag status-tag-plain">{{.ShareCode}}</span>
+                <span class="type-badge">download</span>
+              </div>
+            </div>
+            <span class="status-tag {{if eq .Status "success"}}status-tag-soft{{else if eq .Status "denied"}}status-tag{{else}}status-tag-plain{{end}}">{{.Status}}</span>
+          </div>
+          <div class="mini-card-foot">
+            <span>{{formatTime .CreatedAt}}</span>
+            <span>{{.ClientIP}}</span>
+            <span>{{if .Message}}{{.Message}}{{else}}无附加说明{{end}}</span>
+          </div>
+        </article>
+        {{end}}
       </div>
       {{end}}
     </section>

@@ -712,6 +712,56 @@ FROM access_logs
 	return logs, rows.Err()
 }
 
+func (r *SQLiteRepo) ListAccessLogsByShareCodes(ctx context.Context, eventType string, shareCodes []string, limit int) ([]model.AccessLog, error) {
+	if len(shareCodes) == 0 {
+		return []model.AccessLog{}, nil
+	}
+
+	args := make([]any, 0, len(shareCodes)+2)
+	query := `
+SELECT id, item_id, share_code, item_name, event_type, status, message, client_ip, user_agent, created_at
+FROM access_logs
+WHERE event_type = ?
+  AND share_code IN (` + repeatPlaceholders(len(shareCodes)) + `)
+ORDER BY created_at DESC
+LIMIT ?`
+	args = append(args, strings.TrimSpace(eventType))
+	for _, code := range shareCodes {
+		args = append(args, code)
+	}
+	args = append(args, normalizeLimit(limit, 20))
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var logs []model.AccessLog
+	for rows.Next() {
+		var log model.AccessLog
+		var createdAt int64
+		if err := rows.Scan(
+			&log.ID,
+			&log.ItemID,
+			&log.ShareCode,
+			&log.ItemName,
+			&log.EventType,
+			&log.Status,
+			&log.Message,
+			&log.ClientIP,
+			&log.UserAgent,
+			&createdAt,
+		); err != nil {
+			return nil, err
+		}
+		log.CreatedAt = time.Unix(createdAt, 0).Local()
+		logs = append(logs, log)
+	}
+
+	return logs, rows.Err()
+}
+
 func (r *SQLiteRepo) ensureShareColumn(statement string) error {
 	_, err := r.db.Exec(statement)
 	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
