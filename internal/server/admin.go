@@ -70,6 +70,7 @@ type adminItemView struct {
 	DownloadsExhausted bool
 	EditExpireOptions  []adminExpireOption
 	EditExpireValue    string
+	EditExpireLabel    string
 	DownloadPolicy     string
 	RemainingDownloads int
 }
@@ -315,7 +316,7 @@ func (s *Server) handleUpdateShare(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expireOption := strings.TrimSpace(r.FormValue("expire_option"))
-	expiresAt, err := resolveShareEditExpireOption(expireOption)
+	expiresAt, err := resolveShareEditExpireOption(expireOption, summary.ShareExpiresAt)
 	if err != nil {
 		s.redirectAdminTarget(w, r, currentAdminTarget(r), flashData{Message: "更新分享失败：过期时间选项无效"})
 		return
@@ -481,7 +482,8 @@ func (s *Server) mapAdminItems(r *http.Request, items []model.ItemSummary) []adm
 			IsExpired:          s.shareExpired(model.SharedItem{ShareExpiresAt: item.ShareExpiresAt}),
 			DownloadsExhausted: item.MaxDownloads > 0 && item.DownloadCount >= item.MaxDownloads,
 			EditExpireOptions:  shareEditExpireOptions(item.ShareExpiresAt),
-			EditExpireValue:    inferExpireOption(item.ShareExpiresAt),
+			EditExpireValue:    "keep_current",
+			EditExpireLabel:    currentExpireOptionLabel(item.ShareExpiresAt),
 		}
 		if item.PasswordProtected {
 			view.VisibilityLabel = "密码"
@@ -671,15 +673,20 @@ func shareEditExpireOptions(expiresAt *time.Time) []adminExpireOption {
 	selected := inferExpireOption(expiresAt)
 	options := make([]adminExpireOption, 0, len(expireOptions)+1)
 	options = append(options, adminExpireOption{
+		Value:   "keep_current",
+		Label:   "保持当前",
+		Checked: true,
+	})
+	options = append(options, adminExpireOption{
 		Value:   "expired_now",
 		Label:   "立即过期",
-		Checked: selected == "expired_now",
+		Checked: selected == "expired_now" && false,
 	})
 	for _, option := range expireOptions {
 		options = append(options, adminExpireOption{
 			Value:   option.Value,
 			Label:   option.Label,
-			Checked: option.Value == selected,
+			Checked: option.Value == selected && false,
 		})
 	}
 	return options
@@ -701,13 +708,26 @@ func resolveExpireOption(value string) (*time.Time, error) {
 	return nil, fmt.Errorf("invalid expire option")
 }
 
-func resolveShareEditExpireOption(value string) (*time.Time, error) {
+func resolveShareEditExpireOption(value string, current *time.Time) (*time.Time, error) {
 	value = strings.TrimSpace(value)
+	if value == "" || value == "keep_current" {
+		return current, nil
+	}
 	if value == "expired_now" {
 		expiredAt := time.Now().Add(-time.Minute)
 		return &expiredAt, nil
 	}
 	return resolveExpireOption(value)
+}
+
+func currentExpireOptionLabel(expiresAt *time.Time) string {
+	if expiresAt == nil {
+		return "保持当前（永不过期）"
+	}
+	if expiresAt.Before(time.Now()) {
+		return "保持当前（已过期）"
+	}
+	return "保持当前（" + formatTimePtr(expiresAt) + "）"
 }
 
 func inferExpireOption(expiresAt *time.Time) string {

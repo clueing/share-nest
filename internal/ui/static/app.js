@@ -430,6 +430,7 @@
     expireSelect.name = "expire_option";
 
     const expireOptions = [
+      ["keep_current", trigger.dataset.shareExpireLabel || "保持当前"],
       ["expired_now", "立即过期"],
       ["7h", "7小时"],
       ["6h", "6小时"],
