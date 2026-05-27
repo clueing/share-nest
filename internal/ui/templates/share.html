@@ -21,7 +21,7 @@
           <span>{{humanSize .Item.Size}}</span>
           <span>{{formatTime .Item.CreatedAt}}</span>
           <span>{{if .Item.ShareExpiresAt}}过期于 {{formatTime .Item.ShareExpiresAt}}{{else}}永久有效{{end}}</span>
-          <span>{{if gt .Item.MaxDownloads 0}}下载 {{.Item.DownloadCount}} / {{.Item.MaxDownloads}}{{else}}下载不限{{end}}</span>
+          <span id="downloadCountSummary" data-download-count="{{.Item.DownloadCount}}" data-max-downloads="{{.Item.MaxDownloads}}">{{if gt .Item.MaxDownloads 0}}下载 {{.Item.DownloadCount}} / {{.Item.MaxDownloads}}{{else}}下载不限{{end}}</span>
         </div>
       </div>
       {{if not .Locked}}
@@ -214,9 +214,10 @@
       const button = document.getElementById("downloadShareBtn");
       if (!button) return;
 
-      const sharePage = document.querySelector(".share-page");
       const previewPanel = document.querySelector(".preview-panel");
       const errorNotice = document.querySelector(".notice-error");
+      const countSummary = document.getElementById("downloadCountSummary");
+      const maxDownloads = countSummary ? Number(countSummary.dataset.maxDownloads) : 0;
       const setNotice = (text) => {
         window.AppUI.notify({ message: text, type: "error" });
         if (errorNotice) {
@@ -231,17 +232,26 @@
         header.insertAdjacentElement("afterend", notice);
       };
 
+      const updateDownloadSummary = (count) => {
+        if (!countSummary || Number.isNaN(count) || maxDownloads <= 0) return;
+        const boundedCount = Math.max(0, Math.min(count, maxDownloads));
+        countSummary.dataset.downloadCount = String(boundedCount);
+        countSummary.textContent = `下载 ${boundedCount} / ${maxDownloads}`;
+      };
+
       const replacePreview = () => {
-        if (!previewPanel) return;
-        previewPanel.outerHTML = `
-          <section class="panel">
-            <div class="empty-state">下载次数已用尽，当前分享不再提供预览。</div>
-          </section>
-        `;
+        if (previewPanel) {
+          previewPanel.outerHTML = `
+            <section class="panel">
+              <div class="empty-state">下载次数已用尽，当前分享不再提供预览。</div>
+            </section>
+          `;
+        }
         button.textContent = "下载次数已用尽";
         button.classList.remove("primary-btn");
         button.classList.add("ghost-btn", "disabled-btn");
         button.disabled = true;
+        updateDownloadSummary(maxDownloads);
       };
 
       const parseFilename = (disposition) => {
@@ -288,6 +298,7 @@
           if (!Number.isNaN(downloadsLeft) && downloadsLeft > 0) {
             const nextLeft = downloadsLeft - 1;
             button.dataset.downloadsLeft = String(nextLeft);
+            updateDownloadSummary(maxDownloads - nextLeft);
             if (nextLeft <= 0) {
               replacePreview();
               return;
