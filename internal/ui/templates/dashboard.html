@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/static/app.css">
   <script src="/static/app.js" defer></script>
 </head>
-<body{{if .Message}} data-page-notice="{{.Message}}"{{end}}>
+<body class="admin-page admin-section-{{.CurrentSection}}"{{if .Message}} data-page-notice="{{.Message}}"{{end}}>
   <header class="topbar topbar-admin">
     <div class="topbar-copy">
       <p class="eyebrow">{{.SiteName}}</p>
@@ -161,7 +161,6 @@
       <div class="panel-head">
         <div>
           <h2>创建分享</h2>
-          <p>在文件分享和文本分享之间切换，使用固定过期选项创建新分享。</p>
         </div>
       </div>
       <div class="mode-switch" data-share-mode>
@@ -174,7 +173,7 @@
           <div class="panel-head">
             <div>
               <h2>上传文件</h2>
-              <p>上传后自动生成分享链接。当前最大上传限制：{{humanSize .Files.MaxUploadSize}}</p>
+              <p>最大上传限制：{{humanSize .Files.MaxUploadSize}}</p>
             </div>
           </div>
           <form method="post" action="/admin/upload" enctype="multipart/form-data" class="stack-form" data-upload-form data-redirect-target="{{.Files.CurrentURL}}">
@@ -265,11 +264,10 @@
       </div>
     </section>
 
-    <section class="panel panel-wide">
+    <section class="panel panel-wide resource-list-panel">
       <div class="panel-head">
         <div>
           <h2>资源列表</h2>
-          <p>支持关键字搜索、类型筛选、状态筛选和批量操作。</p>
         </div>
       </div>
 
@@ -342,7 +340,6 @@
 
           <div class="admin-card-title">
             <div class="item-name">{{.Name}}</div>
-            <p class="admin-card-copy">资源本身在这里管理，分享链接和规则统一通过快捷入口操作。</p>
           </div>
 
           <div class="admin-metrics">
@@ -400,11 +397,10 @@
     {{end}}
 
     {{if eq .CurrentSection "shares"}}
-    <section class="panel panel-wide">
+    <section class="panel panel-wide share-management-panel">
       <div class="panel-head">
         <div>
           <h2>分享管理</h2>
-          <p>这里专门处理分享规则、访问入口和下载表现，不再混入资源创建操作。</p>
         </div>
       </div>
       <form method="get" action="/admin/shares" class="filter-grid">

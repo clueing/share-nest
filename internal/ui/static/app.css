@@ -56,6 +56,11 @@ body {
   line-height: 1.5;
 }
 
+.admin-page {
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fc 34%, #f8fafc 100%);
+  font-size: 13px;
+}
+
 a {
   color: var(--accent);
   text-decoration: none;
@@ -214,10 +219,26 @@ textarea {
 
 .topbar-admin {
   align-items: flex-start;
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  max-width: none;
+  padding: 14px max(var(--space-6), calc((100vw - 1280px) / 2 + var(--space-6)));
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
 }
 
 .topbar-copy {
   min-width: 0;
+}
+
+.admin-page .topbar h1 {
+  font-size: 20px;
+}
+
+.admin-page .eyebrow {
+  margin-bottom: 4px;
 }
 
 .topbar-actions {
@@ -232,18 +253,22 @@ textarea {
 .admin-nav {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
   flex-wrap: wrap;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
 }
 
 .admin-nav-link {
   display: inline-flex;
   align-items: center;
-  min-height: 38px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: #fff;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--text-soft);
   font-size: 13px;
   font-weight: 500;
@@ -262,6 +287,40 @@ textarea {
 
 .admin-grid {
   align-items: start;
+  gap: 14px;
+}
+
+.admin-page .dashboard-grid {
+  padding-top: 14px;
+}
+
+.admin-page .panel {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.035);
+}
+
+.admin-page .panel-head {
+  padding-bottom: 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.admin-page .panel-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.admin-page .panel-head h2::before {
+  content: "";
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--accent);
 }
 
 .stats-grid,
@@ -280,8 +339,8 @@ textarea {
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
-  margin-top: var(--space-4);
+  gap: 10px;
+  margin-top: 0;
 }
 
 .stat-card,
@@ -293,9 +352,10 @@ textarea {
 }
 
 .stat-card {
-  padding: 18px;
+  padding: 14px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
+  border-radius: var(--radius-sm);
 }
 
 .stat-card-label {
@@ -304,9 +364,8 @@ textarea {
 }
 
 .stat-card strong {
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1.05;
-  letter-spacing: -0.03em;
 }
 
 .stat-card p {
@@ -317,12 +376,13 @@ textarea {
 
 .list-stack {
   display: grid;
-  gap: 12px;
-  margin-top: var(--space-4);
+  gap: 8px;
+  margin-top: 0;
 }
 
 .mini-card {
-  padding: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
 }
 
 .mini-card-head,
@@ -348,7 +408,12 @@ textarea {
 
 .filter-grid {
   grid-template-columns: minmax(0, 1.8fr) repeat(2, minmax(0, 1fr)) auto;
-  margin: var(--space-4) 0;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  align-items: end;
 }
 
 .filter-actions {
@@ -358,12 +423,13 @@ textarea {
 }
 
 .create-share-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: var(--space-4);
+  grid-template-columns: 1fr;
+  margin-top: 10px;
 }
 
 .subpanel {
-  padding: var(--space-5);
+  padding: 14px;
+  border-radius: var(--radius-sm);
 }
 
 .subpanel-hidden {
@@ -371,23 +437,30 @@ textarea {
 }
 
 .mode-switch {
-  display: flex;
+  display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
+  gap: 4px;
+  margin-top: 0;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
 }
 
 .admin-card-grid {
   display: grid;
-  gap: var(--space-4);
+  gap: 8px;
 }
 
 .admin-card {
   display: grid;
-  gap: var(--space-4);
-  padding: 18px;
+  grid-template-columns: minmax(260px, 1fr) minmax(360px, 1.25fr) minmax(128px, auto);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: #fff;
 }
 
@@ -398,6 +471,47 @@ textarea {
   align-items: flex-start;
   gap: var(--space-3);
   flex-wrap: wrap;
+}
+
+.admin-card-head {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.admin-card-title {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+}
+
+.admin-metrics {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+.admin-card-actions {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  align-items: stretch;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-management-panel .admin-card {
+  grid-template-rows: auto;
+}
+
+.share-management-panel .admin-card-head,
+.share-management-panel .admin-metrics,
+.share-management-panel .admin-card-actions {
+  grid-row: 1;
+}
+
+.admin-card-actions > *,
+.admin-card-actions form,
+.admin-card-actions form button {
+  width: 100%;
 }
 
 .admin-card-copy {
@@ -421,7 +535,7 @@ textarea {
 .admin-metrics {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: 8px;
 }
 
 .admin-metrics-compact {
@@ -430,9 +544,9 @@ textarea {
 
 .admin-metric {
   display: grid;
-  gap: 6px;
-  padding: 14px;
-  border-radius: var(--radius-md);
+  gap: 4px;
+  padding: 10px;
+  border-radius: 7px;
   border: 1px solid var(--line);
   background: var(--bg-subtle);
 }
@@ -443,7 +557,7 @@ textarea {
 }
 
 .admin-metric strong {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.4;
 }
 
@@ -769,6 +883,15 @@ button,
   background: var(--bg-subtle);
 }
 
+.admin-nav-link-active:hover,
+.admin-nav-link-active:focus-visible,
+.mode-switch .is-active:hover,
+.mode-switch .is-active:focus-visible {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+  color: #fff;
+}
+
 .danger-btn {
   background: #fff;
   color: var(--danger);
@@ -808,15 +931,22 @@ button,
 }
 
 .batch-toolbar {
-  padding: 14px 16px;
-  margin-bottom: var(--space-4);
+  padding: 10px 12px;
+  margin-bottom: 10px;
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   background: var(--panel-muted);
 }
 
 .list-toolbar {
-  margin: var(--space-4) 0 var(--space-5);
+  margin: 0 0 10px;
+}
+
+.resource-list-panel .batch-toolbar {
+  position: sticky;
+  top: 72px;
+  z-index: 8;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.07);
 }
 
 .list-stats {
@@ -831,12 +961,14 @@ button,
   background: #fff;
   font-size: 12px;
   font-weight: 500;
+  min-height: 26px;
+  border-radius: 7px;
 }
 
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
-  border-radius: 20px;
+  border-radius: var(--radius-sm);
   background: #fff;
 }
 
@@ -920,6 +1052,7 @@ tbody tr:hover {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .item-meta {
@@ -939,9 +1072,9 @@ tbody tr:hover {
 .status-tag {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: 22px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: 7px;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -1655,6 +1788,34 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
+  .admin-card,
+  .share-management-panel .admin-card {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+
+  .admin-card-head,
+  .admin-card-title,
+  .admin-metrics,
+  .admin-card-actions,
+  .share-management-panel .admin-card-head,
+  .share-management-panel .admin-metrics,
+  .share-management-panel .admin-card-actions {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
+  .admin-card-actions {
+    flex-direction: row;
+    justify-content: flex-start;
+  }
+
+  .admin-card-actions > *,
+  .admin-card-actions form,
+  .admin-card-actions form button {
+    width: auto;
+  }
+
   .list-toolbar,
   .topbar,
   .topbar-actions,
@@ -1735,6 +1896,11 @@ tbody tr:hover {
     padding: var(--space-6) var(--space-4) var(--space-2);
   }
 
+  .topbar-admin {
+    position: static;
+    padding: var(--space-5) var(--space-4) var(--space-3);
+  }
+
   .admin-nav {
     flex-wrap: nowrap;
     overflow-x: auto;
@@ -1763,6 +1929,11 @@ tbody tr:hover {
     padding: 16px;
   }
 
+  .resource-list-panel .batch-toolbar {
+    position: static;
+    box-shadow: none;
+  }
+
   .mini-card-head,
   .mini-card-foot,
   .filter-actions,
@@ -1770,6 +1941,12 @@ tbody tr:hover {
   .admin-card-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .admin-card-actions > *,
+  .admin-card-actions form,
+  .admin-card-actions form button {
+    width: 100%;
   }
 
   .panel,
