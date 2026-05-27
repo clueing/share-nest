@@ -94,6 +94,92 @@ func mimeByExtension(ext string) (string, bool) {
 		return "video/ogg", true
 	case ".mov":
 		return "video/quicktime", true
+	case ".apk":
+		return "application/vnd.android.package-archive", true
+	case ".aab", ".apks", ".apkm", ".xapk", ".ipa":
+		return "application/octet-stream", true
+	case ".aar", ".jar", ".war", ".ear":
+		return "application/java-archive", true
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document", true
+	case ".docm":
+		return "application/vnd.ms-word.document.macroenabled.12", true
+	case ".dotx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.template", true
+	case ".dotm":
+		return "application/vnd.ms-word.template.macroenabled.12", true
+	case ".xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", true
+	case ".xlsm":
+		return "application/vnd.ms-excel.sheet.macroenabled.12", true
+	case ".xlsb":
+		return "application/vnd.ms-excel.sheet.binary.macroenabled.12", true
+	case ".xlam":
+		return "application/vnd.ms-excel.addin.macroenabled.12", true
+	case ".xltx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.template", true
+	case ".xltm":
+		return "application/vnd.ms-excel.template.macroenabled.12", true
+	case ".pptx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation", true
+	case ".pptm":
+		return "application/vnd.ms-powerpoint.presentation.macroenabled.12", true
+	case ".potx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.template", true
+	case ".potm":
+		return "application/vnd.ms-powerpoint.template.macroenabled.12", true
+	case ".ppsx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.slideshow", true
+	case ".ppsm":
+		return "application/vnd.ms-powerpoint.slideshow.macroenabled.12", true
+	case ".ppam":
+		return "application/vnd.ms-powerpoint.addin.macroenabled.12", true
+	case ".sldx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.slide", true
+	case ".sldm":
+		return "application/vnd.ms-powerpoint.slide.macroenabled.12", true
+	case ".thmx":
+		return "application/vnd.ms-officetheme", true
+	case ".odt":
+		return "application/vnd.oasis.opendocument.text", true
+	case ".ott":
+		return "application/vnd.oasis.opendocument.text-template", true
+	case ".ods":
+		return "application/vnd.oasis.opendocument.spreadsheet", true
+	case ".ots":
+		return "application/vnd.oasis.opendocument.spreadsheet-template", true
+	case ".odp":
+		return "application/vnd.oasis.opendocument.presentation", true
+	case ".otp":
+		return "application/vnd.oasis.opendocument.presentation-template", true
+	case ".odg":
+		return "application/vnd.oasis.opendocument.graphics", true
+	case ".otg":
+		return "application/vnd.oasis.opendocument.graphics-template", true
+	case ".odf":
+		return "application/vnd.oasis.opendocument.formula", true
+	case ".epub":
+		return "application/epub+zip", true
+	case ".kmz":
+		return "application/vnd.google-earth.kmz", true
+	case ".3mf":
+		return "model/3mf", true
+	case ".vsix":
+		return "application/vsix", true
+	case ".xpi":
+		return "application/x-xpinstall", true
+	case ".crx":
+		return "application/x-chrome-extension", true
+	case ".key":
+		return "application/vnd.apple.keynote", true
+	case ".numbers":
+		return "application/vnd.apple.numbers", true
+	case ".pages":
+		return "application/vnd.apple.pages", true
+	case ".appx", ".appxbundle", ".msix", ".msixbundle", ".nupkg", ".whl", ".egg", ".love", ".sketch", ".kra", ".ora":
+		return "application/octet-stream", true
+	case ".cbz":
+		return "application/vnd.comicbook+zip", true
 	case ".zip":
 		return "application/zip", true
 	case ".tar":

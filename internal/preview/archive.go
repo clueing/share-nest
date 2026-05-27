@@ -15,6 +15,69 @@ import (
 
 const archiveEntryPreviewLimit = 300
 
+var zipContainerExts = map[string]struct{}{
+	".aab":        {},
+	".aar":        {},
+	".apk":        {},
+	".apkm":       {},
+	".apks":       {},
+	".appx":       {},
+	".appxbundle": {},
+	".cbz":        {},
+	".crx":        {},
+	".docm":       {},
+	".docx":       {},
+	".dotm":       {},
+	".dotx":       {},
+	".ear":        {},
+	".egg":        {},
+	".epub":       {},
+	".ipa":        {},
+	".jar":        {},
+	".kmz":        {},
+	".kra":        {},
+	".key":        {},
+	".love":       {},
+	".msix":       {},
+	".msixbundle": {},
+	".numbers":    {},
+	".nupkg":      {},
+	".odp":        {},
+	".odf":        {},
+	".odg":        {},
+	".ods":        {},
+	".odt":        {},
+	".ora":        {},
+	".otg":        {},
+	".otp":        {},
+	".ots":        {},
+	".ott":        {},
+	".pages":      {},
+	".ppam":       {},
+	".potm":       {},
+	".potx":       {},
+	".ppsm":       {},
+	".ppsx":       {},
+	".pptm":       {},
+	".pptx":       {},
+	".sldm":       {},
+	".sldx":       {},
+	".sketch":     {},
+	".thmx":       {},
+	".vsix":       {},
+	".war":        {},
+	".whl":        {},
+	".xapk":       {},
+	".xlsb":       {},
+	".xlsm":       {},
+	".xlsx":       {},
+	".xlam":       {},
+	".xltm":       {},
+	".xltx":       {},
+	".xpi":        {},
+	".3mf":        {},
+}
+
 type ArchiveEntry struct {
 	Path         string
 	Kind         string
@@ -51,6 +114,10 @@ func ArchiveFormat(name, mimeType string) string {
 		return "gz"
 	}
 
+	if _, ok := zipContainerExts[filepath.Ext(lowerName)]; ok {
+		return ""
+	}
+
 	switch lowerMIME {
 	case "application/zip", "application/x-zip-compressed":
 		return "zip"
@@ -78,8 +145,8 @@ func ArchiveFormatLabel(format string) string {
 	}
 }
 
-func InspectArchive(name string, file *os.File, size int64) (*ArchiveSummary, error) {
-	format := ArchiveFormat(name, "")
+func InspectArchive(name, mimeType string, file *os.File, size int64) (*ArchiveSummary, error) {
+	format := ArchiveFormat(name, mimeType)
 	if format == "" {
 		return nil, fmt.Errorf("unsupported archive format")
 	}

@@ -861,7 +861,7 @@ func (s *Server) loadArchivePreview(item model.SharedItem) (*preview.ArchiveSumm
 		return nil, err
 	}
 	defer file.Close()
-	return preview.InspectArchive(item.Name, file, item.Size)
+	return preview.InspectArchive(item.Name, item.MIMEType, file, item.Size)
 }
 
 func (s *Server) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
